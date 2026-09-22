@@ -1,0 +1,531 @@
+/**
+ * ============================================================================
+ * CTUMP RESEARCH METRICS & AUDIT PORTAL - UNIVERSAL DATA PIPELINE
+ * ============================================================================
+ * Module chuẩn hóa dữ liệu từ MỌI link Google Sheets:
+ * - Nhận diện cột siêu linh hoạt bằng Regex và từ khóa không dấu (Việt & Anh).
+ * - Tự động tương thích với BẤT KỲ Google Sheet nào: bảng điểm CTUMP,
+ *   bảng NCKH quốc tế, danh mục đề tài, hoặc bảng tính tùy biến.
+ * - Trích xuất Điểm HĐGS, Tên tạp chí/Đơn vị, Tên bài báo/Đề tài, Tác giả,
+ *   Năm/Ngày, Minh chứng Drive/URL trong MỌI cột.
+ * - Bảo toàn 100% các cột gốc để người dùng có thể xem trọn vẹn chi tiết.
+ * ============================================================================
+ */
+
+// Hàm xóa dấu tiếng Việt để so sánh chuỗi tiêu đề cột linh hoạt
+export function normalizeStr(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/**
+ * Tìm tên cột trong đối tượng hàng dữ liệu khớp với danh sách từ khóa ứng viên
+ * @param {Record<string, any>} row 
+ * @param {string[]} candidates 
+ * @returns {string | undefined}
+ */
+export function findColKey(row, candidates) {
+  if (!row || typeof row !== 'object') return undefined;
+  const keys = Object.keys(row);
+  for (const candidate of candidates) {
+    const normCand = normalizeStr(candidate);
+    const found = keys.find((k) => normalizeStr(k).includes(normCand));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * Kiểm tra tính hợp lệ của cấu trúc cột CSV từ Google Sheets
+ * Hỗ trợ ĐỌC MỌI GOOGLE SHEET:
+ * - Không từ chối hay chặn bảng tính nếu thiếu cột cụ thể.
+ * - Tự động phát hiện cấu trúc chuẩn CTUMP hay bảng tính tùy biến.
+ * @param {string[]} headers Danh sách các tiêu đề cột từ PapaParse
+ * @param {'source1' | 'source2'} sourceType Loại nguồn dữ liệu
+ * @returns {{ isValid: boolean, isStandardCtump: boolean, missingCols: string[], message: string }}
+ */
+export function validateSheetStructure(headers, sourceType = 'source1') {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return {
+      isValid: false,
+      isStandardCtump: false,
+      missingCols: ['Không có cột dữ liệu'],
+      message: 'Bảng tính không có dữ liệu hoặc file không đúng định dạng CSV.',
+    };
+  }
+
+  // Giả lập một object chứa tất cả các headers để tái sử dụng findColKey
+  const headerRow = {};
+  headers.forEach((h) => {
+    if (h) headerRow[h] = true;
+  });
+
+  const missingCols = [];
+
+  // Kiểm tra các cột cốt lõi NCKH CTUMP
+  const hasTitle = Boolean(findColKey(headerRow, [
+    'tên bài báo', 'tiêu đề', 'title', 'tên đề tài', 'tên bài', 'bài báo', 'tên công trình', 'công trình', 'tên', 'name'
+  ]));
+  if (!hasTitle) missingCols.push('Tên bài báo / Tiêu đề');
+
+  const hasJournal = Boolean(findColKey(headerRow, [
+    'tạp chí', 'journal', 'kỷ yếu', 'nơi công bố', 'nơi xuất bản', 'đơn vị', 'nguồn', 'source'
+  ]));
+  if (!hasJournal) missingCols.push('Tên tạp chí / Nơi công bố');
+
+  if (sourceType === 'source1') {
+    const hasScore = Boolean(findColKey(headerRow, ['số điểm', 'điểm của tạp chí', 'điểm', 'score', 'hdgs']));
+    if (!hasScore) missingCols.push('Số điểm HĐGS');
+  } else {
+    const hasSource2Col = Boolean(
+      findColKey(headerRow, [
+        'xếp hạng chất lượng q', 'xếp hạng q', 'q-rank', 'chất lượng q', 'danh mục', 'chỉ số if', 'impact factor', 'họ và tên người nhập'
+      ])
+    );
+    if (!hasSource2Col) missingCols.push('Phân hạng Q / Danh mục');
+  }
+
+  const isStandardCtump = missingCols.length === 0;
+
+  // Luôn trả về isValid: true nếu bảng tính có ít nhất 1 cột hợp lệ (để đọc được TẤT CẢ Google Sheets)
+  return {
+    isValid: headers.length > 0,
+    isStandardCtump,
+    missingCols,
+    message: isStandardCtump
+      ? 'Cấu trúc danh mục NCKH chuẩn xác.'
+      : `Bảng tính tùy biến (${headers.length} cột). Hệ thống tự động trích xuất thông tin phù hợp.`,
+  };
+}
+
+/**
+ * Bóc tách điểm số thực HĐGS bằng Regex /[0-9]+(\.[0-9]+)?/
+ * Xử lý: "1 điểm" -> 1.0, "0.25 điểm" -> 0.25, "0,5" -> 0.5; nếu không có số hợp lệ gán = 0
+ * @param {any} val 
+ * @returns {{ score: number, display: string }}
+ */
+export function extractScore(val) {
+  if (val === null || val === undefined) return { score: 0, display: '0' };
+  const str = String(val).trim();
+  if (!str) return { score: 0, display: '0' };
+
+  // Thay dấu phẩy thập phân kiểu Việt Nam bằng dấu chấm trước khi áp dụng regex
+  const normalizedStr = str.replace(/,/g, '.');
+  const match = normalizedStr.match(/([0-9]+(?:\.[0-9]+)?)/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    if (!isNaN(num)) {
+      return { score: num, display: num.toString() };
+    }
+  }
+  return { score: 0, display: '0' };
+}
+
+/**
+ * Trích xuất Năm xuất bản (YYYY) và chuỗi ngày đầy đủ
+ * Hỗ trợ các định dạng: DD/MM/YYYY, YYYY-MM-DD, hoặc năm 4 chữ số 20xx / 19xx
+ * @param {any} val 
+ * @returns {{ year: string, fullDate: string }}
+ */
+export function extractYear(val) {
+  if (!val) return { year: 'Chưa rõ', fullDate: '' };
+  const str = String(val).trim();
+
+  // 1. Tìm năm 4 chữ số (19xx hoặc 20xx)
+  const yearMatch = str.match(/\b(19\d{2}|20\d{2})\b/);
+  if (yearMatch) {
+    return { year: yearMatch[1], fullDate: str };
+  }
+
+  // 2. Tìm định dạng ngày phân cách dấu gạch (25/03/2024 hoặc 2024-03-25)
+  const parts = str.split(/[/.-]/);
+  if (parts.length >= 3) {
+    const lastPart = parts[2].trim();
+    if (lastPart.length === 4 && !isNaN(Number(lastPart))) {
+      return { year: lastPart, fullDate: str };
+    }
+    const firstPart = parts[0].trim();
+    if (firstPart.length === 4 && !isNaN(Number(firstPart))) {
+      return { year: firstPart, fullDate: str };
+    }
+  }
+
+  return { year: 'Khác', fullDate: str };
+}
+
+/**
+ * Trích xuất danh sách link minh chứng hợp lệ (đặc biệt là link Google Drive, Web URL)
+ * @param {any} val 
+ * @returns {string[]}
+ */
+export function extractProofLinks(val) {
+  if (!val) return [];
+  const str = String(val);
+  const urlRegex = /(https?:\/\/[^\s,;"<>]+)/g;
+  const matches = str.match(urlRegex) || [];
+  return Array.from(new Set(matches.map((url) => url.trim().replace(/[.,;)]+$/, ''))));
+}
+
+/**
+ * Chuẩn hóa tên Tạp chí: Trim khoảng trắng, chuẩn hóa chữ hoa/thường,
+ * thống nhất danh xưng để gom nhóm thống kê biểu đồ chính xác.
+ * @param {any} rawName 
+ * @returns {string}
+ */
+export function normalizeJournalName(rawName) {
+  if (!rawName) return 'Chưa phân loại';
+  let cleaned = String(rawName)
+    .replace(/^["'\s]+|["'\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return 'Chưa phân loại';
+
+  const lower = cleaned.toLowerCase();
+
+  // Thống nhất các tạp chí Y Dược phổ biến tại CTUMP
+  if (lower.includes('y học việt nam') || lower.includes('y hoc viet nam') || lower === 'vietnam medical journal') {
+    return 'Tạp chí Y học Việt Nam';
+  }
+  if (lower.includes('nghiên cứu y học') || lower.includes('nghien cuu y hoc')) {
+    return 'Tạp chí Nghiên cứu Y học';
+  }
+  if (lower.includes('y học cộng đồng') || lower.includes('y hoc cong dong') || lower.includes('community medicine')) {
+    return 'Tạp chí Y học Cộng đồng';
+  }
+  if (lower.includes('y dược học cần thơ') || lower.includes('y duoc hoc can tho')) {
+    return 'Tạp chí Y Dược học Cần Thơ';
+  }
+  if (lower.includes('tim mạch học việt nam') || lower.includes('tim mach hoc')) {
+    return 'Tạp chí Tim mạch học Việt Nam';
+  }
+  if (lower.includes('hồng bàng') || lower.includes('hong bang')) {
+    return 'Tạp chí Khoa học ĐH Quốc tế Hồng Bàng';
+  }
+  if (lower.includes('đại học cần thơ') || lower.includes('dai hoc can tho')) {
+    return 'Tạp chí Khoa học ĐH Cần Thơ';
+  }
+  if (lower.includes('giáo dục và xã hội') || lower.includes('giao duc va xa hoi')) {
+    return 'Tạp chí Giáo dục và Xã hội';
+  }
+  if (lower.includes('y dược huế') || lower.includes('y duoc hue')) {
+    return 'Tạp chí Y Dược Huế';
+  }
+  if (lower.includes('y dược học quân sự') || lower.includes('y duoc hoc quan su')) {
+    return 'Tạp chí Y Dược học Quân sự';
+  }
+  if (lower.includes('khoa học điều dưỡng') || lower.includes('dieu duong')) {
+    return 'Tạp chí Khoa học Điều dưỡng';
+  }
+
+  // Viết hoa chữ cái đầu
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+/**
+ * Tách danh sách tác giả từ chuỗi bằng dấu phẩy `,` hoặc chấm phẩy `;` hoặc xuống dòng
+ * Đồng thời loại bỏ số chỉ số footnote, dấu sao (*)
+ * @param {any} val 
+ * @returns {string[]}
+ */
+export function parseAuthors(val) {
+  if (!val) return [];
+  const str = String(val);
+  return str
+    .split(/[,;\n]/)
+    .map((author) => {
+      return author
+        .replace(/[0-9*†‡§]+/g, '') // Xóa số chú thích footnote
+        .replace(/^["'\s]+|["'\s]+$/g, '')
+        .trim();
+    })
+    .filter((a) => a.length > 1);
+}
+
+/**
+ * Chuẩn hóa một dòng dữ liệu thô từ BẤT KỲ Google Sheet nào thành bản ghi thống nhất
+ * Tự động thích ứng thông minh với mọi tên cột!
+ * @param {Record<string, any>} row 
+ * @param {number} index 
+ * @param {'source1' | 'source2'} [forcedSource]
+ */
+export function cleanRawRecord(row, index, forcedSource) {
+  if (!row || typeof row !== 'object') {
+    return {
+      id: `rec-empty-${index}`,
+      title: `Bản ghi #${index + 1}`,
+      journal: '—',
+      score: 0,
+      scoreDisplay: '0',
+      publishDate: '',
+      publishYear: 'Chưa rõ',
+      authors: [],
+      authorCount: 0,
+      correspondingAuthor: '—',
+      proofLinks: [],
+      rawRecord: {},
+    };
+  }
+
+  const entries = Object.entries(row);
+
+  // 1. Nhận diện nguồn dữ liệu
+  const hasQRank = findColKey(row, ['chất lượng q', 'xếp hạng q', 'q-rank', 'ranking q']);
+  const hasCategory = findColKey(row, ['danh mục', 'category', 'scopus', 'isi']);
+  const isSource2 = forcedSource === 'source2' || (!forcedSource && (hasQRank || hasCategory || findColKey(row, ['họ và tên người nhập'])));
+  const sourceType = isSource2 ? 'source2' : (forcedSource || 'source1');
+
+  // 2. Tên bài báo / Tiêu đề / Tên đề tài: tìm theo danh sách từ khóa rộng
+  const titleKey = findColKey(row, [
+    'tên bài báo', 'tiêu đề', 'title', 'tên đề tài', 'tên bài', 'bài báo',
+    'tên công trình', 'công trình', 'tên', 'name', 'đề tài', 'chủ đề', 'topic',
+    'nội dung', 'content', 'mô tả', 'description', 'sản phẩm', 'nhiệm vụ'
+  ]);
+
+  let title = '';
+  if (titleKey && row[titleKey]) {
+    title = String(row[titleKey]).replace(/^["'\s]+|["'\s]+$/g, '').trim();
+  }
+
+  // Nếu không tìm thấy bằng từ khóa, chọn cột đầu tiên có chuỗi văn bản ý nghĩa
+  if (!title) {
+    const textEntry = entries.find(([k, v]) => {
+      if (!v) return false;
+      const str = String(v).trim();
+      const normK = normalizeStr(k);
+      // Bỏ qua cột STT, ID, ngày, link
+      if (normK === 'stt' || normK === 'id' || normK === 'no' || normK.includes('link') || normK.includes('url')) return false;
+      return str.length >= 3 && !/^\d+$/.test(str) && !str.startsWith('http');
+    });
+    if (textEntry) {
+      title = String(textEntry[1]).trim();
+    }
+  }
+  if (!title) {
+    title = `Bản ghi #${index + 1}`;
+  }
+
+  // 3. Tên tạp chí / Nơi công bố / Đơn vị
+  const journalKey = findColKey(row, [
+    'tên tạp chí', 'tên tạp chí, kỷ yếu', 'tạp chí', 'journal', 'kỷ yếu',
+    'nơi công bố', 'nơi xuất bản', 'đơn vị', 'nguồn', 'source', 'publisher',
+    'khoa', 'phòng', 'bộ môn', 'chuyên ngành', 'danh mục', 'category', 'cơ quan', 'tổ chức'
+  ]);
+  let rawJournal = journalKey && row[journalKey] ? String(row[journalKey]) : '';
+  
+  // Nếu không tìm thấy, thử tìm cột thứ 2 có văn bản
+  if (!rawJournal) {
+    const secondTextEntry = entries.find(([k, v]) => {
+      if (!v) return false;
+      const str = String(v).trim();
+      const normK = normalizeStr(k);
+      if (k === titleKey || normK === 'stt' || normK === 'id' || normK.includes('link')) return false;
+      return str.length >= 2 && !/^\d+$/.test(str) && !str.startsWith('http');
+    });
+    if (secondTextEntry) {
+      rawJournal = String(secondTextEntry[1]).trim();
+    }
+  }
+  const journal = rawJournal ? normalizeJournalName(rawJournal) : 'Chưa phân loại';
+
+  // 4. Điểm HĐGS / Điểm số / Điểm
+  const scoreKey = findColKey(row, [
+    'số điểm', 'điểm của tạp chí', 'điểm', 'score', 'hdgs', 'hội đồng giáo sư',
+    'point', 'points', 'giá trị', 'điểm số', 'thang điểm', 'kết quả'
+  ]);
+  let { score, display: scoreDisplay } = scoreKey ? extractScore(row[scoreKey]) : { score: 0, display: '0' };
+
+  // 5. Ngày xuất bản / Thời gian
+  const dateKey = findColKey(row, [
+    'ngày, tháng, năm', 'ngày xuất bản', 'ngày công bố', 'ngày', 'date',
+    'thời gian xuất bản', 'thời gian', 'năm', 'year', 'năm xuất bản', 'thời điểm'
+  ]);
+  const { year: publishYear, fullDate: publishDate } = dateKey ? extractYear(row[dateKey]) : { year: 'Chưa rõ', fullDate: '' };
+
+  // 6. Nhóm tác giả / Danh sách tác giả / Người thực hiện
+  const authorsKey = findColKey(row, [
+    'nhóm tác giả', 'danh sách tác giả', 'tác giả', 'authors', 'author',
+    'họ và tên', 'họ tên', 'người thực hiện', 'chủ nhiệm', 'thành viên',
+    'họ và tên người nhập', 'người nhập', 'cán bộ', 'nhân sự'
+  ]);
+  const authors = authorsKey ? parseAuthors(row[authorsKey]) : [];
+  const authorCount = authors.length || 1;
+
+  // 7. Tác giả liên hệ / Chủ trì
+  const correspondingKey = findColKey(row, [
+    'tác giả liên hệ', 'corresponding', 'tác giả chịu trách nhiệm',
+    'chủ nhiệm', 'chủ trì', 'người liên hệ', 'người phụ trách'
+  ]);
+  let correspondingAuthor = correspondingKey && row[correspondingKey] ? String(row[correspondingKey]).trim() : '';
+  correspondingAuthor = correspondingAuthor.replace(/[0-9*†‡§]+/g, '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+
+  // Nếu chưa có tác giả liên hệ rõ ràng, lấy tác giả đầu tiên trong danh sách
+  if (!correspondingAuthor && authors.length > 0) {
+    correspondingAuthor = authors[0];
+  }
+
+  // 8. Minh chứng & Link URL:
+  // Quét cả cột minh chứng VÀ quét toàn bộ các cột trong hàng để tìm bất kỳ link URL nào (Google Drive, Dropbox, DOI, v.v.)
+  const proofKey = findColKey(row, [
+    'minh chứng', 'tải file minh chứng', 'drive.google.com', 'proof', 'link file',
+    'link', 'url', 'liên kết', 'tài liệu', 'file minh chứng', 'file', 'đường dẫn'
+  ]);
+  let proofLinks = proofKey ? extractProofLinks(row[proofKey]) : [];
+
+  // Quét bổ sung toàn bộ hàng để không bỏ sót bất kỳ link nào
+  entries.forEach(([_, val]) => {
+    if (val && typeof val === 'string' && val.includes('http')) {
+      const foundUrls = extractProofLinks(val);
+      foundUrls.forEach((u) => {
+        if (!proofLinks.includes(u)) proofLinks.push(u);
+      });
+    }
+  });
+
+  // 9. Tập, số, trang
+  const volumeKey = findColKey(row, ['tập, số, trang', 'tập (số), trang', 'volume', 'issue', 'page', 'số trang']);
+  const volumeIssuePage = volumeKey && row[volumeKey] ? String(row[volumeKey]).trim() : '';
+
+  // 10. Mã ISSN / ISBN
+  const issnKey = findColKey(row, ['issn', 'isbn']);
+  const issn = issnKey && row[issnKey] ? String(row[issnKey]).trim() : '';
+
+  // 11. Thông tin mở rộng: Q-Rank, Category, IF, DOI, Email
+  const categoryKey = findColKey(row, ['tạp chí nằm trong danh mục', 'danh mục', 'category', 'loại']);
+  const category = categoryKey && row[categoryKey] ? String(row[categoryKey]).trim() : '';
+
+  const qRankKey = findColKey(row, ['xếp hạng chất lượng q', 'xếp hạng q', 'q-rank', 'ranking q', 'chất lượng q', 'q rank', 'hạng q']);
+  let qRank = qRankKey && row[qRankKey] ? String(row[qRankKey]).trim().toUpperCase() : '';
+  if (qRank && !['Q1', 'Q2', 'Q3', 'Q4'].includes(qRank)) {
+    const qMatch = qRank.match(/\b(Q[1-4])\b/i);
+    qRank = qMatch ? qMatch[1].toUpperCase() : (qRank.length > 15 ? `${qRank.slice(0, 15)}...` : qRank);
+  }
+
+  const ifKey = findColKey(row, ['chỉ số if', 'impact factor', 'if']);
+  const impactFactor = ifKey && row[ifKey] ? String(row[ifKey]).trim() : '';
+
+  const doiKey = findColKey(row, ['số doi', 'doi']);
+  const doi = doiKey && row[doiKey] ? String(row[doiKey]).trim() : '';
+
+  const emailKey = findColKey(row, ['địa chỉ email', 'email']);
+  const email = emailKey && row[emailKey] ? String(row[emailKey]).trim() : '';
+
+  const timeKey = findColKey(row, ['dấu thời gian', 'timestamp']);
+  const timestamp = timeKey && row[timeKey] ? String(row[timeKey]).trim() : '';
+
+  // Nếu có xếp hạng Q mà điểm = 0 thì quy đổi điểm tham chiếu
+  if (score === 0 && qRank) {
+    if (qRank === 'Q1') score = 1.0;
+    else if (qRank === 'Q2') score = 0.75;
+    else if (qRank === 'Q3') score = 0.5;
+    else if (qRank === 'Q4') score = 0.25;
+    if (score > 0) scoreDisplay = score.toString();
+  }
+
+  return {
+    id: `rec-${sourceType}-${index}-${Date.now() % 100000}`,
+    timestamp,
+    email,
+    title,
+    journal,
+    issn,
+    score,
+    scoreDisplay: score > 0 ? score.toString() : (scoreDisplay || '0'),
+    publishDate,
+    publishYear,
+    authors,
+    authorCount,
+    correspondingAuthor: correspondingAuthor || 'Chưa cập nhật',
+    volumeIssuePage,
+    proofLinks,
+    category,
+    qRank,
+    impactFactor,
+    doi,
+    sourceType,
+    rawRecord: row, // Giữ 100% cột dữ liệu gốc của Google Sheet
+  };
+}
+
+/**
+ * Chuẩn hóa toàn bộ mảng dữ liệu thô từ PapaParse
+ * @param {Array<Record<string, any>>} rawData 
+ * @param {'source1' | 'source2'} [sourceType] 
+ * @returns {Array<any>}
+ */
+export function cleanDataset(rawData, sourceType) {
+  if (!Array.isArray(rawData)) return [];
+  return rawData
+    .filter((row) => {
+      if (!row || typeof row !== 'object') return false;
+      const values = Object.values(row).join('').trim();
+      return values.length > 0;
+    })
+    .map((row, idx) => cleanRawRecord(row, idx, sourceType));
+}
+
+/**
+ * Xuất dữ liệu đã chuẩn hóa sang file CSV có hỗ trợ UTF-8 BOM cho Excel tiếng Việt
+ * @param {Array<any>} records 
+ * @param {string} filename 
+ */
+export function exportToCleanCSV(records, filename = 'CTUMP_NCKH_Cleaned.csv') {
+  if (!records || records.length === 0) {
+    alert('Không có dữ liệu để xuất!');
+    return;
+  }
+
+  const headers = [
+    'STT',
+    'Nguồn Dữ Liệu',
+    'Tên Bài Báo',
+    'Tác Giả Liên Hệ',
+    'Tên Tạp Chí / Kỷ Yếu',
+    'Điểm HĐGS',
+    'Năm Xuất Bản',
+    'Ngày Xuất Bản',
+    'Số Lượng Tác Giả',
+    'Danh Sách Tác Giả',
+    'Tập, Số, Trang',
+    'Mã ISSN',
+    'Minh Chứng PDF / Drive',
+    'Phân Hạng Q',
+    'Chỉ Số IF',
+    'Email Liên Hệ'
+  ];
+
+  const rows = records.map((r, i) => [
+    i + 1,
+    r.sourceType === 'source1' ? 'Nguồn 1' : 'Nguồn 2',
+    `"${(r.title || '').replace(/"/g, '""')}"`,
+    `"${(r.correspondingAuthor || '').replace(/"/g, '""')}"`,
+    `"${(r.journal || '').replace(/"/g, '""')}"`,
+    r.score,
+    r.publishYear,
+    `"${(r.publishDate || '').replace(/"/g, '""')}"`,
+    r.authorCount,
+    `"${(r.authors || []).join(', ').replace(/"/g, '""')}"`,
+    `"${(r.volumeIssuePage || '').replace(/"/g, '""')}"`,
+    `"${(r.issn || '').replace(/"/g, '""')}"`,
+    `"${(r.proofLinks || []).join(' | ').replace(/"/g, '""')}"`,
+    r.qRank || 'N/A',
+    r.impactFactor || 'N/A',
+    `"${(r.email || '').replace(/"/g, '""')}"`
+  ]);
+
+  // Thêm ký tự UTF-8 BOM (\uFEFF) ở đầu file để Excel tiếng Việt hiển thị không lỗi font
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((row) => row.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

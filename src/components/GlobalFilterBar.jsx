@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, RotateCcw, X } from 'lucide-react';
+import { Search, RotateCcw, X } from 'lucide-react';
 
 /**
  * ============================================================================

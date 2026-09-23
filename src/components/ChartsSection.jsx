@@ -31,7 +31,8 @@ const SCORE_COLORS = {
   'Khác/0đ': '#64748B', // slate-500
 };
 
-export const ChartsSection = ({ records = [] }) => {
+export const ChartsSection = ({ records = [], theme = 'dark' }) => {
+  const isDark = theme !== 'light';
   // 1. Chuẩn bị dữ liệu bài báo theo Năm
   const yearData = useMemo(() => {
     const counts = {};
@@ -115,17 +116,18 @@ export const ChartsSection = ({ records = [] }) => {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={yearData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="year" stroke="#94A3B8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} />
+                <XAxis dataKey="year" stroke={isDark ? "#94A3B8" : "#64748B"} fontSize={11} tickLine={false} />
+                <YAxis stroke={isDark ? "#94A3B8" : "#64748B"} fontSize={11} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0F172A',
-                    borderColor: '#334155',
+                    backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+                    borderColor: isDark ? '#334155' : '#E2E8F0',
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: isDark ? '#fff' : '#0F172A',
                     fontSize: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                   }}
-                  cursor={{ fill: 'rgba(51, 65, 85, 0.4)' }}
+                  cursor={{ fill: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)' }}
                 />
                 <Bar dataKey="count" name="Số bài" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -171,15 +173,16 @@ export const ChartsSection = ({ records = [] }) => {
                     name,
                   ]}
                   contentStyle={{
-                    backgroundColor: '#0F172A',
-                    borderColor: '#334155',
+                    backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+                    borderColor: isDark ? '#334155' : '#E2E8F0',
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: isDark ? '#fff' : '#0F172A',
                     fontSize: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                   }}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                  formatter={(value) => <span className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{value}</span>}
                   layout="horizontal"
                   verticalAlign="bottom"
                   align="center"
@@ -208,11 +211,11 @@ export const ChartsSection = ({ records = [] }) => {
                 data={topJournalsData}
                 margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
               >
-                <XAxis type="number" stroke="#94A3B8" fontSize={11} tickLine={false} />
+                <XAxis type="number" stroke={isDark ? "#94A3B8" : "#64748B"} fontSize={11} tickLine={false} />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  stroke="#94A3B8"
+                  stroke={isDark ? "#94A3B8" : "#64748B"}
                   fontSize={10}
                   tickLine={false}
                   width={110}
@@ -220,13 +223,14 @@ export const ChartsSection = ({ records = [] }) => {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0F172A',
-                    borderColor: '#334155',
+                    backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+                    borderColor: isDark ? '#334155' : '#E2E8F0',
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: isDark ? '#fff' : '#0F172A',
                     fontSize: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                   }}
-                  cursor={{ fill: 'rgba(51, 65, 85, 0.4)' }}
+                  cursor={{ fill: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)' }}
                 />
                 <Bar dataKey="count" name="Số bài" fill="#F59E0B" radius={[0, 4, 4, 0]} />
               </BarChart>

@@ -13,7 +13,6 @@ import {
   Building2,
   Calendar,
   Layers,
-  BookOpen,
 } from 'lucide-react';
 
 /**

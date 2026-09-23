@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Papa from 'papaparse';
-import { cleanDataset, validateSheetStructure } from '../utils/cleanData.js';
+import { cleanDataset, validateSheetStructure, normalizeStr } from '../utils/cleanData.js';
 import { parseGoogleSheetUrl } from '../utils/urlConverter.js';
 
 /**
@@ -8,10 +8,12 @@ import { parseGoogleSheetUrl } from '../utils/urlConverter.js';
  * CUSTOM HOOK: useGoogleSheet
  * ============================================================================
  * Nạp dữ liệu TRỰC TIẾP từ link Google Sheets:
- * - Đọc trực tiếp qua Google Visualization API (GViz CSV) hoặc Direct Export CSV
+ * - Đọc trực tiếp qua Google Visualization API (GViz CSV) với tq=SELECT *
  * - Chống Cache: Gắn tham số `&_nocache=${Date.now()}` và `{ cache: 'no-store' }`
- * - Chống mất dòng / gãy dòng: PapaParse chuẩn quoteChar: '"', escapeChar: '"'
- * - Không sử dụng bản sao lưu tĩnh, chỉ hiển thị dữ liệu trực tiếp từ link
+ * - Tránh CORS preflight: KHÔNG dùng custom headers (Pragma/Cache-Control)
+ * - Tự động dự phòng CORS Proxy nếu kết nối trực tiếp bị trình duyệt hạn chế
+ * - Tự động dò tìm dòng Header (Header Row Detection) nếu bảng tính có banner
+ * - Báo lỗi và hướng dẫn chi tiết nếu Sheet để ở chế độ Riêng tư (Private)
  * ============================================================================
  */
 export function useGoogleSheet(sheetUrl, sourceType = 'source1') {
@@ -24,23 +26,112 @@ export function useGoogleSheet(sheetUrl, sourceType = 'source1') {
 
   const isMounted = useRef(true);
 
-  // Hàm fetch nội dung từ URL với chế độ chống cache
+  // Hàm fetch nội dung từ URL chuẩn CORS (Simple GET request, no preflight)
   const fetchUrlText = async (targetUrl) => {
     const separator = targetUrl.includes('?') ? '&' : '?';
     const antiCacheUrl = `${targetUrl}${separator}_nocache=${Date.now()}`;
-    const response = await fetch(antiCacheUrl, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: {
-        Pragma: 'no-cache',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-      },
+
+    try {
+      const response = await fetch(antiCacheUrl, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (response.ok) {
+        return await response.text();
+      }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    } catch (directErr) {
+      // Dự phòng bằng các CORS Proxy công khai nếu trình duyệt chặn cross-origin
+      const fallbackProxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(antiCacheUrl)}`,
+        `https://corsproxy.io/?url=${encodeURIComponent(antiCacheUrl)}`,
+      ];
+
+      for (const proxyUrl of fallbackProxies) {
+        try {
+          const proxyRes = await fetch(proxyUrl, { method: 'GET', cache: 'no-store' });
+          if (proxyRes.ok) {
+            const text = await proxyRes.text();
+            if (text && text.trim().length > 0) {
+              return text;
+            }
+          }
+        } catch {
+          // Thử proxy tiếp theo
+        }
+      }
+
+      throw directErr;
+    }
+  };
+
+  // Hàm phát hiện dòng Header thực sự nếu bảng tính có dòng tiêu đề banner ở đầu
+  const extractHeadersAndRows = (rawRows) => {
+    if (!rawRows || rawRows.length === 0) {
+      return { headers: [], rows: [] };
+    }
+
+    // Tìm dòng có nhiều cột khớp từ khóa bảng tính khoa học nhất (trong 5 dòng đầu)
+    let headerRowIdx = 0;
+    let maxKeywordMatches = -1;
+
+    for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
+      const row = rawRows[i];
+      if (!row || row.length <= 1) continue;
+
+      let matches = 0;
+      for (const cell of row) {
+        const norm = normalizeStr(cell);
+        if (
+          norm.includes('ten bai') ||
+          norm.includes('tieu de') ||
+          norm.includes('title') ||
+          norm.includes('tap chi') ||
+          norm.includes('journal') ||
+          norm.includes('diem') ||
+          norm.includes('score') ||
+          norm.includes('tac gia') ||
+          norm.includes('author') ||
+          norm.includes('minh chung') ||
+          norm.includes('dau thoi gian') ||
+          norm.includes('timestamp') ||
+          norm.includes('danh muc') ||
+          norm.includes('xep hang') ||
+          norm === 'stt' ||
+          norm === 'email'
+        ) {
+          matches++;
+        }
+      }
+
+      if (matches > maxKeywordMatches && matches >= 2) {
+        maxKeywordMatches = matches;
+        headerRowIdx = i;
+      }
+    }
+
+    const headerCells = rawRows[headerRowIdx] || [];
+    const headers = headerCells.map((h, colIdx) => {
+      const clean = (h || '').replace(/^\uFEFF/, '').trim();
+      return clean || `Cột_${colIdx + 1}`;
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.text();
+    const dataRows = rawRows.slice(headerRowIdx + 1);
+    const rows = [];
+
+    dataRows.forEach((rowValues) => {
+      const hasContent = rowValues.some((v) => v && String(v).trim().length > 0);
+      if (!hasContent) return;
+
+      const record = {};
+      headers.forEach((hdr, idx) => {
+        record[hdr] = rowValues[idx] !== undefined ? rowValues[idx] : '';
+      });
+      rows.push(record);
+    });
+
+    return { headers, rows };
   };
 
   // Hàm nạp và xử lý dữ liệu trực tiếp từ Google Sheets
@@ -60,63 +151,85 @@ export function useGoogleSheet(sheetUrl, sourceType = 'source1') {
 
     try {
       const parsed = parseGoogleSheetUrl(sheetUrl);
-      const targetUrl = parsed.primaryUrl || sheetUrl.trim();
+      const urlsToTry = [parsed.primaryUrl, ...parsed.fallbackUrls].filter(Boolean);
 
       let csvText = '';
       let fetchSuccess = false;
+      let lastFetchError = null;
 
-      // 1. Thử fetch bằng Primary URL (GViz hoặc Published CSV)
-      try {
-        csvText = await fetchUrlText(targetUrl);
+      for (const targetUrl of urlsToTry) {
+        try {
+          csvText = await fetchUrlText(targetUrl);
 
-        if (csvText.includes('google.visualization.Query.setResponse') && csvText.includes('"status":"error"')) {
-          throw new Error('GViz API báo lỗi truy vấn dữ liệu hoặc ID trang tính (gid) không tồn tại.');
-        }
-
-        // Kiểm tra nếu link trả về trang HTML đăng nhập Google (Bảng tính riêng tư)
-        if (
-          csvText.includes('<!DOCTYPE html>') &&
-          (csvText.includes('accounts.google.com') ||
-            csvText.includes('ServiceLogin') ||
-            csvText.includes('Sign in - Google Accounts'))
-        ) {
-          throw new Error(
-            'Google Sheet này đang ở chế độ Riêng tư (Private). Vui lòng mở quyền: "Bất kỳ ai có đường liên kết đều có thể xem".'
-          );
-        }
-
-        fetchSuccess = true;
-      } catch (primaryErr) {
-        // 2. Nếu Primary URL thất bại và có Export URL dự phòng -> Thử tiếp Export URL
-        if (parsed.exportUrl && parsed.exportUrl !== targetUrl && !primaryErr.message?.includes('Riêng tư')) {
-          try {
-            csvText = await fetchUrlText(parsed.exportUrl);
-            if (!csvText.includes('<!DOCTYPE html>')) {
-              fetchSuccess = true;
+          // Kiểm tra xem GViz có trả về thông báo lỗi JSON không
+          if (csvText.includes('google.visualization.Query.setResponse')) {
+            const match = csvText.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
+            if (match) {
+              try {
+                const resJson = JSON.parse(match[1]);
+                if (resJson.status === 'error' && resJson.errors && resJson.errors.length > 0) {
+                  const detail = resJson.errors
+                    .map((e) => e.message || e.detailed_message || e.reason)
+                    .join(', ');
+                  throw new Error(`Google GViz: ${detail}`);
+                }
+              } catch (parseErr) {
+                if (parseErr.message.startsWith('Google GViz:')) {
+                  throw parseErr;
+                }
+              }
             }
-          } catch (exportErr) {
-            console.warn('[Fallback Failed] Direct Export không thành công:', exportErr.message);
+          }
+
+          // Kiểm tra nếu Google trả về trang HTML đăng nhập (Sheet để chế độ Private)
+          const isHtml =
+            csvText.includes('<!DOCTYPE html>') ||
+            csvText.includes('<html') ||
+            csvText.includes('accounts.google.com') ||
+            csvText.includes('ServiceLogin');
+
+          if (isHtml) {
+            if (
+              csvText.includes('accounts.google.com') ||
+              csvText.includes('ServiceLogin') ||
+              csvText.includes('Sign in') ||
+              csvText.includes('quyền') ||
+              csvText.includes('permission')
+            ) {
+              throw new Error(
+                'Google Sheet này đang ở chế độ Riêng tư (Private). Vui lòng mở quyền: "Bất kỳ ai có đường liên kết đều có thể xem" (Chia sẻ -> Bất kỳ ai có liên kết -> Người xem).'
+              );
+            }
+            throw new Error(
+              'Đường link không trả về dữ liệu bảng tính (Google trả về trang HTML). Vui lòng kiểm tra quyền chia sẻ công khai.'
+            );
+          }
+
+          fetchSuccess = true;
+          break;
+        } catch (err) {
+          lastFetchError = err;
+          if (err.message.includes('Riêng tư')) {
+            throw err;
           }
         }
+      }
 
-        if (!fetchSuccess) {
-          throw primaryErr;
-        }
+      if (!fetchSuccess) {
+        throw lastFetchError || new Error('Không thể kết nối hoặc đọc dữ liệu từ Google Sheet này.');
       }
 
       // 3. Phân tích chuỗi CSV bằng PapaParse
       Papa.parse(csvText, {
-        header: true,
+        header: false,
         skipEmptyLines: 'greedy',
         quoteChar: '"',
         escapeChar: '"',
-        transformHeader: (h) => (h ? h.trim() : ''),
         complete: (results) => {
           if (!isMounted.current) return;
-          const rows = results.data || [];
-          const headers = results.meta.fields || (rows[0] ? Object.keys(rows[0]) : []);
+          const rawRows = results.data || [];
 
-          if (rows.length === 0 || headers.length === 0) {
+          if (rawRows.length === 0) {
             setError('Bảng tính Google Sheet rỗng hoặc không chứa dòng dữ liệu nào.');
             setData([]);
             setRawData([]);
@@ -124,8 +237,21 @@ export function useGoogleSheet(sheetUrl, sourceType = 'source1') {
             return;
           }
 
+          // Tự động tìm dòng header chính xác và chuyển thành các bản ghi object
+          const { headers, rows } = extractHeadersAndRows(rawRows);
+
+          if (rows.length === 0 || headers.length === 0) {
+            setError('Bảng tính không có dữ liệu hàng nào sau khi xử lý dòng tiêu đề.');
+            setData([]);
+            setRawData([]);
+            setLoading(false);
+            return;
+          }
+
+          // Xác thực và đối chiếu cấu trúc cột với cấu trúc chuẩn CTUMP
           const validation = validateSheetStructure(headers, sourceType);
 
+          // Nạp dữ liệu trực tiếp từ Google Sheet
           setRawData(rows);
           const cleaned = cleanDataset(rows, sourceType);
           setData(cleaned);

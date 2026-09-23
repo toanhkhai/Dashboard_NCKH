@@ -19,6 +19,8 @@ export function normalizeStr(str) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_\n\r\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 

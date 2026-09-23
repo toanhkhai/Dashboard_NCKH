@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
 import { exportToCleanCSV } from './utils/cleanData.js';
 import { convertToGvizUrl } from './utils/urlConverter.js';
@@ -23,6 +23,22 @@ import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
  */
 export default function App() {
   const [activeTab, setActiveTab] = useState('source1');
+
+  // Quản lý Theme: 'dark' (Black) hoặc 'light' (White)
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('ctump_theme');
+    return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', theme === 'light');
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('ctump_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   const [sheet1Url, setSheet1Url] = useState(() => {
     const saved = localStorage.getItem('ctump_sheet1_url');
@@ -126,29 +142,29 @@ export default function App() {
     activeTab === 'source1'
       ? sheet1.loading
       : activeTab === 'source2'
-      ? sheet2.loading
-      : sheet1.loading || sheet2.loading;
+        ? sheet2.loading
+        : sheet1.loading || sheet2.loading;
 
   const currentError =
     activeTab === 'source1'
       ? sheet1.error
       : activeTab === 'source2'
-      ? sheet2.error
-      : sheet1.error || sheet2.error;
+        ? sheet2.error
+        : (sheet1.error && sheet2.error ? `${sheet1.error} | ${sheet2.error}` : null);
 
   const currentWarning =
     activeTab === 'source1'
       ? sheet1.warning
       : activeTab === 'source2'
-      ? sheet2.warning
-      : sheet1.warning || sheet2.warning;
+        ? sheet2.warning
+        : (sheet1.warning || sheet2.warning || (sheet1.error ? `Nguồn 1: ${sheet1.error}` : sheet2.error ? `Nguồn 2: ${sheet2.error}` : null));
 
   const currentLastUpdated =
     activeTab === 'source1'
       ? sheet1.lastUpdated
       : activeTab === 'source2'
-      ? sheet2.lastUpdated
-      : sheet1.lastUpdated || sheet2.lastUpdated;
+        ? sheet2.lastUpdated
+        : sheet1.lastUpdated || sheet2.lastUpdated;
 
   const handleRefresh = () => {
     sheet1.refetch();
@@ -160,8 +176,8 @@ export default function App() {
       activeTab === 'source1'
         ? 'NgoaiTruong'
         : activeTab === 'source2'
-        ? 'MoRong_QuocTe'
-        : 'TongHop';
+          ? 'MoRong_QuocTe'
+          : 'TongHop';
     const filename = `CTUMP_Research_${tabName}_${new Date().toISOString().slice(0, 10)}.csv`;
     exportToCleanCSV(filteredRecords, filename);
   };
@@ -183,7 +199,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+    <div className={`min-h-screen ${theme === 'light' ? 'bg-slate-50 text-slate-900 light' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200`}>
       <Header
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -194,6 +210,8 @@ export default function App() {
         lastUpdated={currentLastUpdated}
         loading={currentLoading}
         error={currentError}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onRefresh={handleRefresh}
         onExportCSV={handleExportCSV}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -267,7 +285,7 @@ export default function App() {
               loading={currentLoading}
             />
 
-            <ChartsSection records={filteredRecords} />
+            <ChartsSection records={filteredRecords} theme={theme} />
 
             <DataTable
               records={filteredRecords}

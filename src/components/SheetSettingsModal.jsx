@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, RotateCcw, HelpCircle, Check, Wand2, Link2, Sparkles } from 'lucide-react';
-import { convertToGvizUrl } from '../utils/urlConverter.js';
+import { convertToGvizUrl, parseGoogleSheetUrl } from '../utils/urlConverter.js';
 
 /**
  * ============================================================================
@@ -102,6 +102,21 @@ export const SheetSettingsModal = ({
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
               placeholder="Dán link Google Sheet Nguồn 1 (link chia sẻ, edit, gviz...)"
             />
+            {url1.trim() && (
+              <div className="mt-1 flex items-center gap-1.5 text-[11px]">
+                {parseGoogleSheetUrl(url1).isGoogleSheet ? (
+                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    Đã nhận diện: Google Sheet (ID: {parseGoogleSheetUrl(url1).spreadsheetId?.slice(0, 10)}...
+                    {parseGoogleSheetUrl(url1).gid !== null ? ` | Tab: gid=${parseGoogleSheetUrl(url1).gid}` : ' | Tab đầu tiên'})
+                  </span>
+                ) : (
+                  <span className="text-amber-400 font-medium">
+                    Link ngoài / tùy biến
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
@@ -115,6 +130,21 @@ export const SheetSettingsModal = ({
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
               placeholder="Dán link Google Sheet Nguồn 2 (link chia sẻ, edit, gviz...)"
             />
+            {url2.trim() && (
+              <div className="mt-1 flex items-center gap-1.5 text-[11px]">
+                {parseGoogleSheetUrl(url2).isGoogleSheet ? (
+                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    Đã nhận diện: Google Sheet (ID: {parseGoogleSheetUrl(url2).spreadsheetId?.slice(0, 10)}...
+                    {parseGoogleSheetUrl(url2).gid !== null ? ` | Tab: gid=${parseGoogleSheetUrl(url2).gid}` : ' | Tab đầu tiên'})
+                  </span>
+                ) : (
+                  <span className="text-amber-400 font-medium">
+                    Link ngoài / tùy biến
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Nút chuyển đổi tự động URL */}

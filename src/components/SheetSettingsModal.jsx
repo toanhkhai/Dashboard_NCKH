@@ -68,50 +68,50 @@ export const SheetSettingsModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ">
+      <div className="bg-white border border-slate-200 rounded-sm max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-sm relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+          className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 p-1.5 rounded-sm hover:bg-slate-100 transition-colors"
           title="Đóng modal"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">
+        <div className="flex items-center gap-2 text-blue-600 text-xs font-bold uppercase tracking-wider mb-1">
           <Sparkles className="w-4 h-4" />
           <span>Cấu hình Liên Kết Google Sheets</span>
         </div>
 
-        <h3 className="text-base font-extrabold text-white mb-2">
+        <h3 className="text-base font-extrabold text-slate-800 mb-2">
           Kết nối trực tiếp link Google Sheets của bạn
         </h3>
-        <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
           Chỉ cần quăng link Google Sheet vào đây — hệ thống sẽ tự động fetch và hiển thị trực tiếp lên Dashboard thời gian thực.
         </p>
 
         <div className="space-y-4 text-xs">
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
+            <label className="block text-slate-700 font-semibold mb-1">
               Nguồn 1: Bài báo Ngoài Trường (HĐGS) hoặc Google Sheet bài báo
             </label>
             <input
               type="text"
               value={url1}
               onChange={(e) => setUrl1(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
+              className="w-full bg-slate-50 border border-slate-300 rounded-sm p-2.5 text-slate-900 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
               placeholder="Dán link Google Sheet Nguồn 1 (link chia sẻ, edit, gviz...)"
             />
             {url1.trim() && (
               <div className="mt-1 flex items-center gap-1.5 text-[11px]">
                 {parseGoogleSheetUrl(url1).isGoogleSheet ? (
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="text-emerald-600 font-medium flex items-center gap-1">
                     <Check className="w-3 h-3" />
                     Đã nhận diện: Google Sheet (ID: {parseGoogleSheetUrl(url1).spreadsheetId?.slice(0, 10)}...
                     {parseGoogleSheetUrl(url1).gid !== null ? ` | Tab: gid=${parseGoogleSheetUrl(url1).gid}` : ' | Tab đầu tiên'})
                   </span>
                 ) : (
-                  <span className="text-amber-400 font-medium">
+                  <span className="text-amber-600 font-medium">
                     Link ngoài / tùy biến
                   </span>
                 )}
@@ -120,26 +120,26 @@ export const SheetSettingsModal = ({
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
+            <label className="block text-slate-700 font-semibold mb-1">
               Nguồn 2: Danh mục NCKH Mở rộng / Quốc tế (Scopus/ISI) hoặc Sheet thứ 2
             </label>
             <input
               type="text"
               value={url2}
               onChange={(e) => setUrl2(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
+              className="w-full bg-slate-50 border border-slate-300 rounded-sm p-2.5 text-slate-900 font-mono text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
               placeholder="Dán link Google Sheet Nguồn 2 (link chia sẻ, edit, gviz...)"
             />
             {url2.trim() && (
               <div className="mt-1 flex items-center gap-1.5 text-[11px]">
                 {parseGoogleSheetUrl(url2).isGoogleSheet ? (
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="text-emerald-600 font-medium flex items-center gap-1">
                     <Check className="w-3 h-3" />
                     Đã nhận diện: Google Sheet (ID: {parseGoogleSheetUrl(url2).spreadsheetId?.slice(0, 10)}...
                     {parseGoogleSheetUrl(url2).gid !== null ? ` | Tab: gid=${parseGoogleSheetUrl(url2).gid}` : ' | Tab đầu tiên'})
                   </span>
                 ) : (
-                  <span className="text-amber-400 font-medium">
+                  <span className="text-amber-600 font-medium">
                     Link ngoài / tùy biến
                   </span>
                 )}
@@ -151,28 +151,28 @@ export const SheetSettingsModal = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleAutoConvert}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 text-[11px] font-semibold border border-indigo-500/30 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-semibold border border-indigo-200 transition-all"
               title="Tự động kiểm tra và chuyển đổi link thường sang endpoint tối ưu"
             >
               <Wand2 className="w-3.5 h-3.5" />
               <span>Tự động tối ưu URL</span>
             </button>
             {autoConvertMsg && (
-              <span className="text-[11px] text-emerald-400 font-medium animate-fadeIn">
+              <span className="text-[11px] text-emerald-600 font-medium ">
                 {autoConvertMsg}
               </span>
             )}
           </div>
 
           {/* Lưu ý quan trọng về Quyền chia sẻ */}
-          <div className="p-3.5 bg-blue-500/10 border border-blue-500/25 rounded-xl text-blue-200 text-[11px] leading-relaxed flex items-start gap-2.5">
-            <HelpCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-sm text-blue-800 text-[11px] leading-relaxed flex items-start gap-2.5">
+            <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <div>
-              <strong className="text-blue-300">Yêu cầu quyền truy cập Google Sheets:</strong>
-              <p className="mt-1 text-slate-300">
+              <strong className="text-blue-900">Yêu cầu quyền truy cập Google Sheets:</strong>
+              <p className="mt-1 text-slate-700">
                 Để ứng dụng đọc trực tiếp dữ liệu từ Google Sheets:
               </p>
-              <ol className="mt-1 space-y-1 text-slate-300/90 list-decimal list-inside pl-1">
+              <ol className="mt-1 space-y-1 text-slate-700 list-decimal list-inside pl-1">
                 <li>Mở file Google Sheet của bạn trên trình duyệt.</li>
                 <li>Bấm nút <strong>Chia sẻ (Share)</strong> ở góc trên bên phải.</li>
                 <li>Ở mục "Quyền truy cập chung", chọn <strong>"Bất kỳ ai có đường liên kết đều có thể xem"</strong> (Anyone with the link can view).</li>
@@ -182,24 +182,24 @@ export const SheetSettingsModal = ({
           </div>
 
           {/* Hướng dẫn các định dạng URL được hỗ trợ */}
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-200 text-[11px] leading-relaxed flex items-start gap-2.5">
-            <Link2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-sm text-emerald-800 text-[11px] leading-relaxed flex items-start gap-2.5">
+            <Link2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <strong className="text-emerald-300">Hỗ trợ tất cả định dạng link Google Sheets:</strong>
-              <ul className="mt-1 space-y-0.5 text-emerald-200/80 list-disc list-inside">
-                <li>Link chia sẻ: <code className="bg-emerald-950/60 px-1 rounded">.../d/ID/edit?usp=sharing</code></li>
-                <li>Link edit tab cụ thể: <code className="bg-emerald-950/60 px-1 rounded">.../d/ID/edit#gid=123</code></li>
-                <li>Link xuất bản web: <code className="bg-emerald-950/60 px-1 rounded">.../d/e/2PACX-.../pub?output=csv</code></li>
+              <strong className="text-emerald-900">Hỗ trợ tất cả định dạng link Google Sheets:</strong>
+              <ul className="mt-1 space-y-0.5 text-emerald-700 list-disc list-inside">
+                <li>Link chia sẻ: <code className="bg-emerald-100 text-emerald-800 px-1 rounded border border-emerald-200">.../d/ID/edit?usp=sharing</code></li>
+                <li>Link edit tab cụ thể: <code className="bg-emerald-100 text-emerald-800 px-1 rounded border border-emerald-200">.../d/ID/edit#gid=123</code></li>
+                <li>Link xuất bản web: <code className="bg-emerald-100 text-emerald-800 px-1 rounded border border-emerald-200">.../d/e/2PACX-.../pub?output=csv</code></li>
                 <li>Link tải CSV hoặc GViz API</li>
               </ul>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-6 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
           <button
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold border border-slate-300 transition-colors"
             title="Khôi phục về link Google Sheets mặc định của CTUMP"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -209,13 +209,13 @@ export const SheetSettingsModal = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="px-3.5 py-2 rounded-sm text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
             >
               Đóng
             </button>
             <button
               onClick={handleSave}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-900/30"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-900/30"
             >
               {savedMessage ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
               <span>{savedMessage ? 'Đã lưu!' : 'Lưu & Nạp lại'}</span>
@@ -226,3 +226,4 @@ export const SheetSettingsModal = ({
     </div>
   );
 };
+

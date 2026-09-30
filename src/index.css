@@ -2,182 +2,35 @@
 
 @layer base {
   body {
-    background-color: #020617; /* slate-950 */
-    color: #f8fafc;
+    background-color: #f8fafc; /* slate-50 */
+    color: #0f172a; /* slate-900 */
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
 
-  /* Custom dark scrollbar */
+  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #0f172a;
+    background: #f1f5f9;
   }
   ::-webkit-scrollbar-thumb {
-    background: #334155;
-    border-radius: 9999px;
+    background: #cbd5e1;
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+    background: #94a3b8;
   }
-}
 
-/* ============================================================================
- * WHITE THEME (LIGHT MODE) OVERRIDES
- * ============================================================================ */
-html.light body,
-.light body {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
-}
-
-html.light ::-webkit-scrollbar-track,
-.light ::-webkit-scrollbar-track {
-  background: #f1f5f9 !important;
-}
-
-html.light ::-webkit-scrollbar-thumb,
-.light ::-webkit-scrollbar-thumb {
-  background: #cbd5e1 !important;
-}
-
-html.light ::-webkit-scrollbar-thumb:hover,
-.light ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8 !important;
-}
-
-html.light .bg-slate-950,
-.light .bg-slate-950 {
-  background-color: #f8fafc !important;
-}
-
-html.light .bg-slate-900,
-html.light .bg-slate-900\/80,
-html.light .bg-slate-900\/95,
-html.light .bg-slate-900\/60,
-.light .bg-slate-900,
-.light .bg-slate-900\/80,
-.light .bg-slate-900\/95,
-.light .bg-slate-900\/60 {
-  background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
-}
-
-html.light .bg-slate-800,
-html.light .bg-slate-800\/80,
-html.light .bg-slate-800\/70,
-html.light .bg-slate-800\/60,
-html.light .bg-slate-800\/40,
-.light .bg-slate-800,
-.light .bg-slate-800\/80,
-.light .bg-slate-800\/70,
-.light .bg-slate-800\/60,
-.light .bg-slate-800\/40 {
-  background-color: #f1f5f9 !important;
-}
-
-html.light .hover\:bg-slate-800:hover,
-html.light .hover\:bg-slate-750:hover,
-html.light .hover\:bg-slate-700:hover,
-.light .hover\:bg-slate-800:hover,
-.light .hover\:bg-slate-750:hover,
-.light .hover\:bg-slate-700:hover {
-  background-color: #e2e8f0 !important;
-}
-
-html.light .border-slate-800,
-html.light .border-slate-800\/80,
-html.light .border-slate-700,
-.light .border-slate-800,
-.light .border-slate-800\/80,
-.light .border-slate-700 {
-  border-color: #e2e8f0 !important;
-}
-
-html.light .border-slate-800\/30,
-.light .border-slate-800\/30 {
-  border-color: #f1f5f9 !important;
-}
-
-html.light .text-white,
-.light .text-white {
-  color: #0f172a !important;
-}
-
-html.light .text-slate-100,
-html.light .text-slate-200,
-.light .text-slate-100,
-.light .text-slate-200 {
-  color: #1e293b !important;
-}
-
-html.light .text-slate-300,
-.light .text-slate-300 {
-  color: #334155 !important;
-}
-
-html.light .text-slate-400,
-.light .text-slate-400 {
-  color: #64748b !important;
-}
-
-html.light .text-slate-500,
-.light .text-slate-500 {
-  color: #94a3b8 !important;
-}
-
-html.light input[type="text"],
-html.light input[type="search"],
-html.light select,
-.light input[type="text"],
-.light input[type="search"],
-.light select {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-}
-
-html.light input::placeholder,
-.light input::placeholder {
-  color: #94a3b8 !important;
-}
-
-/* Modal styling in light mode */
-html.light .fixed.inset-0.bg-black\/75,
-.light .fixed.inset-0.bg-black\/75 {
-  background-color: rgba(15, 23, 42, 0.5) !important;
-}
-
-/* Table styling in light mode */
-html.light .bg-slate-950\/80,
-.light .bg-slate-950\/80 {
-  background-color: #f1f5f9 !important;
-}
-
-html.light tr:hover,
-.light tr:hover {
-  background-color: #f8fafc !important;
-}
-
-html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
-.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #e2e8f0 !important;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
+  /* Remove number input spinners */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
-  to {
-    opacity: 1;
-    transform: scale(1);
+  input[type="number"] {
+    -moz-appearance: textfield; /* Firefox */
   }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

@@ -10,10 +10,11 @@
   - Data Parsing: PapaParse.
   - Hosting: Client-side Single Page Application (SPA), không có Backend Node/Express (tạm thời, tương lai mở rộng Backend + DB cho RBAC).
 - **Nguồn dữ liệu (Google Sheets GViz API):**
-  - Nguồn 1 (source1): Bài báo Ngoài Trường (HĐGS) - GID: 287019159
-    URL: `https://docs.google.com/spreadsheets/d/1T36gWiDQkD07cXwHUA82J4hfFWHEC9pj4VD-PwHNADo/gviz/tq?tqx=out:csv&tq=SELECT%20*&gid=287019159`
-  - Nguồn 2 (source2): Danh mục NCKH Mở rộng & Quốc tế (Scopus/ISI) - GID: 1298748218
+  - Nguồn 1 (source1): Bài báo Ngoài Trường (HĐGS) - GID: 1298748218
     URL: `https://docs.google.com/spreadsheets/d/1Tg9evoX-lIykGi_F5z4FwXU2Hhy9af7UFGNz30f4lwo/gviz/tq?tqx=out:csv&tq=SELECT%20*&gid=1298748218`
+
+  - Nguồn 2 (source2): Danh mục NCKH Mở rộng & Quốc tế (Scopus/ISI) - GID: 287019159
+    URL: `https://docs.google.com/spreadsheets/d/1T36gWiDQkD07cXwHUA82J4hfFWHEC9pj4VD-PwHNADo/gviz/tq?tqx=out:csv&tq=SELECT%20*&gid=287019159`
 
 ## 2. Cấu trúc thư mục chuẩn (KHÔNG TỰ Ý ĐỔI TÊN/TẠO THƯ MỤC LẠ)
 - `public/logo/logo.png`: Assets tĩnh, logo và favicon.

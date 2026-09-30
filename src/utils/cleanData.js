@@ -120,7 +120,8 @@ export function extractScore(val) {
   const match = normalizedStr.match(/([0-9]+(?:\.[0-9]+)?)/);
   if (match) {
     const num = parseFloat(match[1]);
-    if (!isNaN(num)) {
+    // Điểm HĐGS công nhận hợp lệ tối đa theo quy định HĐGS nhà nước là 1.0 đến 2.5
+    if (!isNaN(num) && num <= 2.5) {
       return { score: num, display: num.toString() };
     }
   }
@@ -181,46 +182,48 @@ export function extractProofLinks(val) {
 export function normalizeJournalName(rawName) {
   if (!rawName) return 'Chưa phân loại';
   let cleaned = String(rawName)
+    .normalize('NFC') // Chuẩn hóa Unicode để tránh lỗi 2 chuỗi nhìn giống nhưng khác byte
     .replace(/^["'\s]+|["'\s]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
   if (!cleaned) return 'Chưa phân loại';
 
-  const lower = cleaned.toLowerCase();
+  // Lấy chuỗi không dấu để kiểm tra linh hoạt hơn (tránh lỗi gõ sai dấu)
+  const searchStr = normalizeStr(cleaned);
 
   // Thống nhất các tạp chí Y Dược phổ biến tại CTUMP
-  if (lower.includes('y học việt nam') || lower.includes('y hoc viet nam') || lower === 'vietnam medical journal') {
+  if (searchStr.includes('y hoc viet nam') || searchStr === 'vietnam medical journal') {
     return 'Tạp chí Y học Việt Nam';
   }
-  if (lower.includes('nghiên cứu y học') || lower.includes('nghien cuu y hoc')) {
+  if (searchStr.includes('nghien cuu y hoc')) {
     return 'Tạp chí Nghiên cứu Y học';
   }
-  if (lower.includes('y học cộng đồng') || lower.includes('y hoc cong dong') || lower.includes('community medicine')) {
+  if (searchStr.includes('y hoc cong dong') || searchStr.includes('community medicine')) {
     return 'Tạp chí Y học Cộng đồng';
   }
-  if (lower.includes('y dược học cần thơ') || lower.includes('y duoc hoc can tho')) {
+  if (searchStr.includes('y duoc hoc can tho')) {
     return 'Tạp chí Y Dược học Cần Thơ';
   }
-  if (lower.includes('tim mạch học việt nam') || lower.includes('tim mach hoc')) {
+  if (searchStr.includes('tim mach hoc')) {
     return 'Tạp chí Tim mạch học Việt Nam';
   }
-  if (lower.includes('hồng bàng') || lower.includes('hong bang')) {
+  if (searchStr.includes('hong bang')) {
     return 'Tạp chí Khoa học ĐH Quốc tế Hồng Bàng';
   }
-  if (lower.includes('đại học cần thơ') || lower.includes('dai hoc can tho')) {
+  if (searchStr.includes('dai hoc can tho')) {
     return 'Tạp chí Khoa học ĐH Cần Thơ';
   }
-  if (lower.includes('giáo dục và xã hội') || lower.includes('giao duc va xa hoi')) {
+  if (searchStr.includes('giao duc va xa hoi')) {
     return 'Tạp chí Giáo dục và Xã hội';
   }
-  if (lower.includes('y dược huế') || lower.includes('y duoc hue')) {
+  if (searchStr.includes('y duoc hue')) {
     return 'Tạp chí Y Dược Huế';
   }
-  if (lower.includes('y dược học quân sự') || lower.includes('y duoc hoc quan su')) {
+  if (searchStr.includes('y duoc hoc quan su')) {
     return 'Tạp chí Y Dược học Quân sự';
   }
-  if (lower.includes('khoa học điều dưỡng') || lower.includes('dieu duong')) {
+  if (searchStr.includes('dieu duong')) {
     return 'Tạp chí Khoa học Điều dưỡng';
   }
 
@@ -335,9 +338,10 @@ export function cleanRawRecord(row, index, forcedSource) {
   const journal = rawJournal ? normalizeJournalName(rawJournal) : 'Chưa phân loại';
 
   // 4. Điểm HĐGS / Điểm số / Điểm
+  // Chỉ tìm các cột đích thực là điểm HĐGS hoặc điểm tạp chí (tránh nhầm lẫn với cột IF hoặc PLVC)
   const scoreKey = findColKey(row, [
-    'số điểm', 'điểm của tạp chí', 'điểm', 'score', 'hdgs', 'hội đồng giáo sư',
-    'point', 'points', 'giá trị', 'điểm số', 'thang điểm', 'kết quả'
+    'số điểm của tạp chí', 'số điểm', 'điểm của tạp chí', 'điểm tạp chí',
+    'điểm hdgs', 'hội đồng giáo sư', 'thang điểm', 'score'
   ]);
   let { score, display: scoreDisplay } = scoreKey ? extractScore(row[scoreKey]) : { score: 0, display: '0' };
 
@@ -419,13 +423,10 @@ export function cleanRawRecord(row, index, forcedSource) {
   const timeKey = findColKey(row, ['dấu thời gian', 'timestamp']);
   const timestamp = timeKey && row[timeKey] ? String(row[timeKey]).trim() : '';
 
-  // Nếu có xếp hạng Q mà điểm = 0 thì quy đổi điểm tham chiếu
-  if (score === 0 && qRank) {
-    if (qRank === 'Q1') score = 1.0;
-    else if (qRank === 'Q2') score = 0.75;
-    else if (qRank === 'Q3') score = 0.5;
-    else if (qRank === 'Q4') score = 0.25;
-    if (score > 0) scoreDisplay = score.toString();
+  // Bài báo Quốc tế (source2) đánh giá theo Phân hạng Q / Impact Factor / Scopus; không gán điểm HĐGS giả lập
+  if (sourceType === 'source2' && !scoreKey) {
+    score = 0;
+    scoreDisplay = '—';
   }
 
   return {
@@ -449,6 +450,7 @@ export function cleanRawRecord(row, index, forcedSource) {
     impactFactor,
     doi,
     sourceType,
+    paperType: sourceType === 'source1' ? 'Trong nước (HĐGS)' : 'Quốc tế (Scopus/ISI)',
     rawRecord: row, // Giữ 100% cột dữ liệu gốc của Google Sheet
   };
 }
@@ -502,7 +504,7 @@ export function exportToCleanCSV(records, filename = 'CTUMP_NCKH_Cleaned.csv') {
 
   const rows = records.map((r, i) => [
     i + 1,
-    r.sourceType === 'source1' ? 'Nguồn 1' : 'Nguồn 2',
+    r.sourceType === 'source1' ? 'Trong nước (Ngoài trường - HĐGS)' : 'Quốc tế (Scopus/ISI & Mở rộng)',
     `"${(r.title || '').replace(/"/g, '""')}"`,
     `"${(r.correspondingAuthor || '').replace(/"/g, '""')}"`,
     `"${(r.journal || '').replace(/"/g, '""')}"`,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
 import { exportToCleanCSV } from './utils/cleanData.js';
 import { convertToGvizUrl } from './utils/urlConverter.js';
@@ -11,41 +11,21 @@ import { SheetSettingsModal } from './components/SheetSettingsModal.jsx';
 import { AlertCircle, RefreshCw, Settings, FileSpreadsheet } from 'lucide-react';
 import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
 
-/**
- * ============================================================================
- * CTUMP RESEARCH METRICS & AUDIT PORTAL - MAIN APPLICATION
- * ============================================================================
- * Đọc TRỰC TIẾP 100% từ link Google Sheets của người dùng:
- * - Không dùng dữ liệu tĩnh / bản sao lưu cố định
- * - Quăng link Google Sheet vào là hiển thị Dashboard trực tiếp
- * - Tự động nhận diện cấu trúc cột, trích xuất điểm HĐGS, tác giả, bài báo
- * ============================================================================
- */
 export default function App() {
-  const [activeTab, setActiveTab] = useState('source1');
-
-  // Quản lý Theme: 'dark' (Black) hoặc 'light' (White)
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('ctump_theme');
-    return (saved === 'light' || saved === 'dark') ? saved : 'dark';
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', theme === 'light');
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('ctump_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
-
   const [sheet1Url, setSheet1Url] = useState(() => {
     const saved = localStorage.getItem('ctump_sheet1_url');
+    if (saved && saved.includes('287019159')) {
+      localStorage.removeItem('ctump_sheet1_url');
+      return DEFAULT_SHEET1_URL;
+    }
     return saved ? convertToGvizUrl(saved) : DEFAULT_SHEET1_URL;
   });
   const [sheet2Url, setSheet2Url] = useState(() => {
     const saved = localStorage.getItem('ctump_sheet2_url');
+    if (saved && saved.includes('1298748218')) {
+      localStorage.removeItem('ctump_sheet2_url');
+      return DEFAULT_SHEET2_URL;
+    }
     return saved ? convertToGvizUrl(saved) : DEFAULT_SHEET2_URL;
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -59,13 +39,16 @@ export default function App() {
     score: 'all',
     journal: 'all',
     qRank: 'all',
+    sourceType: 'all',
   });
 
+  const activeView = filters.sourceType === 'all' ? 'combined' : filters.sourceType;
+
   const activeRecords = useMemo(() => {
-    if (activeTab === 'source1') return sheet1.data;
-    if (activeTab === 'source2') return sheet2.data;
+    if (activeView === 'source1') return sheet1.data;
+    if (activeView === 'source2') return sheet2.data;
     return [...sheet1.data, ...sheet2.data];
-  }, [activeTab, sheet1.data, sheet2.data]);
+  }, [activeView, sheet1.data, sheet2.data]);
 
   const availableYears = useMemo(() => {
     const set = new Set();
@@ -134,35 +117,39 @@ export default function App() {
         if (record.qRank !== filters.qRank) return false;
       }
 
+      if (filters.sourceType && filters.sourceType !== 'all') {
+        if (record.sourceType !== filters.sourceType) return false;
+      }
+
       return true;
     });
   }, [activeRecords, filters]);
 
   const currentLoading =
-    activeTab === 'source1'
+    activeView === 'source1'
       ? sheet1.loading
-      : activeTab === 'source2'
+      : activeView === 'source2'
         ? sheet2.loading
         : sheet1.loading || sheet2.loading;
 
   const currentError =
-    activeTab === 'source1'
+    activeView === 'source1'
       ? sheet1.error
-      : activeTab === 'source2'
+      : activeView === 'source2'
         ? sheet2.error
         : (sheet1.error && sheet2.error ? `${sheet1.error} | ${sheet2.error}` : null);
 
   const currentWarning =
-    activeTab === 'source1'
+    activeView === 'source1'
       ? sheet1.warning
-      : activeTab === 'source2'
+      : activeView === 'source2'
         ? sheet2.warning
         : (sheet1.warning || sheet2.warning || (sheet1.error ? `Nguồn 1: ${sheet1.error}` : sheet2.error ? `Nguồn 2: ${sheet2.error}` : null));
 
   const currentLastUpdated =
-    activeTab === 'source1'
+    activeView === 'source1'
       ? sheet1.lastUpdated
-      : activeTab === 'source2'
+      : activeView === 'source2'
         ? sheet2.lastUpdated
         : sheet1.lastUpdated || sheet2.lastUpdated;
 
@@ -173,9 +160,9 @@ export default function App() {
 
   const handleExportCSV = () => {
     const tabName =
-      activeTab === 'source1'
+      activeView === 'source1'
         ? 'NgoaiTruong'
-        : activeTab === 'source2'
+        : activeView === 'source2'
           ? 'MoRong_QuocTe'
           : 'TongHop';
     const filename = `CTUMP_Research_${tabName}_${new Date().toISOString().slice(0, 10)}.csv`;
@@ -199,19 +186,16 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'light' ? 'bg-slate-50 text-slate-900 light' : 'bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200`}>
+    <div className={`min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200`}>
       <Header
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          setFilters((f) => ({ ...f, qRank: 'all', journal: 'all' }));
-        }}
+        activeTab={activeView}
+        onTabChange={() => {}}
         recordCount={activeRecords.length}
+        source1Count={sheet1.data.length}
+        source2Count={sheet2.data.length}
         lastUpdated={currentLastUpdated}
         loading={currentLoading}
         error={currentError}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onRefresh={handleRefresh}
         onExportCSV={handleExportCSV}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -219,22 +203,22 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentError && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3.5 text-red-200 text-xs sm:text-sm shadow-lg animate-fadeIn">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 rounded-sm bg-red-50 border border-red-200 flex items-start gap-3.5 text-red-800 text-xs sm:text-sm shadow-sm">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <div className="font-bold text-red-300">Không thể đọc dữ liệu từ Google Sheets:</div>
-              <p className="text-red-200/90 mt-1 leading-relaxed">{currentError}</p>
+              <div className="font-bold text-red-900">Không thể đọc dữ liệu từ Google Sheets:</div>
+              <p className="mt-1 leading-relaxed">{currentError}</p>
               <div className="mt-3 flex items-center flex-wrap gap-2.5">
                 <button
                   onClick={handleRefresh}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-100 text-xs font-semibold border border-red-500/40 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Thử tải lại</span>
                 </button>
                 <button
                   onClick={() => setIsSettingsOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 transition-colors"
                 >
                   <Settings className="w-3.5 h-3.5" />
                   <span>Kiểm tra / Đổi link Google Sheet</span>
@@ -245,22 +229,22 @@ export default function App() {
         )}
 
         {!currentError && currentWarning && (
-          <div className="mb-6 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center gap-3 text-blue-200 text-xs animate-fadeIn">
-            <FileSpreadsheet className="w-4 h-4 text-blue-400 shrink-0" />
+          <div className="mb-6 p-3 rounded-sm bg-blue-50 border border-blue-200 flex items-center gap-3 text-blue-800 text-xs">
+            <FileSpreadsheet className="w-4 h-4 text-blue-600 shrink-0" />
             <p className="flex-1">{currentWarning}</p>
           </div>
         )}
 
         {!currentLoading && activeRecords.length === 0 && !currentError && (
-          <div className="my-12 text-center p-8 rounded-2xl bg-slate-900/60 border border-slate-800 max-w-lg mx-auto">
-            <FileSpreadsheet className="w-12 h-12 text-slate-500 mx-auto mb-3 opacity-60" />
-            <h3 className="text-base font-bold text-slate-200 mb-1">Chưa có dữ liệu từ Google Sheet</h3>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+          <div className="my-12 text-center p-8 bg-white border border-slate-200 max-w-lg mx-auto shadow-sm">
+            <FileSpreadsheet className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-60" />
+            <h3 className="text-base font-bold text-slate-800 mb-1">Chưa có dữ liệu từ Google Sheet</h3>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               Bảng tính hiện tại chưa có dữ liệu hoặc bạn chưa cấu hình link Google Sheet.
             </p>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-900/30 transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
             >
               <Settings className="w-4 h-4" />
               <span>Dán link Google Sheet để bắt đầu</span>
@@ -276,16 +260,18 @@ export default function App() {
               availableYears={availableYears}
               availableScores={availableScores}
               availableJournals={availableJournals}
-              isSource2={activeTab === 'source2' || activeTab === 'combined'}
+              isSource2={activeView === 'source2'}
+              isCombined={true}
             />
 
             <KPICards
               records={filteredRecords}
-              isSource2={activeTab === 'source2'}
+              isSource2={activeView === 'source2'}
+              activeTab={activeView}
               loading={currentLoading}
             />
 
-            <ChartsSection records={filteredRecords} theme={theme} />
+            <ChartsSection records={filteredRecords} activeTab={activeView} />
 
             <DataTable
               records={filteredRecords}
@@ -295,12 +281,9 @@ export default function App() {
         )}
       </main>
 
-      <footer className="bg-slate-900/80 border-t border-slate-800/80 py-5 px-4 text-center text-xs text-slate-500">
-        <p className="font-medium text-slate-400">
-          CTUMP Research Metrics & Audit Portal • Trường Đại học Y Dược Cần Thơ
-        </p>
-        <p className="text-[11px] text-slate-500 mt-1">
-          Đồng bộ trực tiếp 100% từ Google Sheets • Tự động chuẩn hóa HĐGS, nhận diện cấu trúc bảng & Thẩm định minh chứng Drive PDF
+      <footer className="bg-white border-t border-slate-200 py-5 px-4 text-center text-xs text-slate-500">
+        <p className="font-medium text-slate-600">
+          Trường Đại học Y Dược Cần Thơ - Phòng Khoa học và Công nghệ
         </p>
       </footer>
 

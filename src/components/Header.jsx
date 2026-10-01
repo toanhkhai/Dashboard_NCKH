@@ -27,7 +27,7 @@ export const Header = ({
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           {/* Logo & Portal Title */}
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 flex items-center justify-center shrink-0 p-0.5 bg-white border border-slate-200 overflow-hidden">
+            <div className="w-12 h-12 flex items-center justify-center shrink-0 p-0.5 bg-white overflow-hidden">
               <img
                 src="/logo/logo.png"
                 alt="Logo CTUMP"

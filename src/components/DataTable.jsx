@@ -112,7 +112,7 @@ export const DataTable = ({ records = [], loading = false }) => {
 
       {/* Table Body */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm table-fixed">
+        <table className="w-full min-w-[900px] text-left text-sm table-fixed">
           <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider">
             <tr>
               <th className="py-3 px-2 text-center w-[4%] truncate" title="STT">STT</th>

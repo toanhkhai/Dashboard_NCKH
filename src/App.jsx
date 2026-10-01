@@ -7,28 +7,12 @@ import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
 import { DataTable } from './components/DataTable.jsx';
 import { GlobalFilterBar } from './components/GlobalFilterBar.jsx';
-import { SheetSettingsModal } from './components/SheetSettingsModal.jsx';
-import { AlertCircle, RefreshCw, Settings, FileSpreadsheet } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
 
 export default function App() {
-  const [sheet1Url, setSheet1Url] = useState(() => {
-    const saved = localStorage.getItem('ctump_sheet1_url');
-    if (saved && saved.includes('287019159')) {
-      localStorage.removeItem('ctump_sheet1_url');
-      return DEFAULT_SHEET1_URL;
-    }
-    return saved ? convertToGvizUrl(saved) : DEFAULT_SHEET1_URL;
-  });
-  const [sheet2Url, setSheet2Url] = useState(() => {
-    const saved = localStorage.getItem('ctump_sheet2_url');
-    if (saved && saved.includes('1298748218')) {
-      localStorage.removeItem('ctump_sheet2_url');
-      return DEFAULT_SHEET2_URL;
-    }
-    return saved ? convertToGvizUrl(saved) : DEFAULT_SHEET2_URL;
-  });
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const sheet1Url = DEFAULT_SHEET1_URL;
+  const sheet2Url = DEFAULT_SHEET2_URL;
 
   const sheet1 = useGoogleSheet(sheet1Url, 'source1');
   const sheet2 = useGoogleSheet(sheet2Url, 'source2');
@@ -153,11 +137,6 @@ export default function App() {
         ? sheet2.lastUpdated
         : sheet1.lastUpdated || sheet2.lastUpdated;
 
-  const handleRefresh = () => {
-    sheet1.refetch();
-    sheet2.refetch();
-  };
-
   const handleExportCSV = () => {
     const tabName =
       activeView === 'source1'
@@ -167,22 +146,6 @@ export default function App() {
           : 'TongHop';
     const filename = `CTUMP_Research_${tabName}_${new Date().toISOString().slice(0, 10)}.csv`;
     exportToCleanCSV(filteredRecords, filename);
-  };
-
-  const handleSaveUrls = (url1, url2) => {
-    const finalUrl1 = convertToGvizUrl(url1);
-    const finalUrl2 = convertToGvizUrl(url2);
-    setSheet1Url(finalUrl1);
-    setSheet2Url(finalUrl2);
-    localStorage.setItem('ctump_sheet1_url', finalUrl1);
-    localStorage.setItem('ctump_sheet2_url', finalUrl2);
-  };
-
-  const handleResetDefaults = () => {
-    setSheet1Url(DEFAULT_SHEET1_URL);
-    setSheet2Url(DEFAULT_SHEET2_URL);
-    localStorage.removeItem('ctump_sheet1_url');
-    localStorage.removeItem('ctump_sheet2_url');
   };
 
   return (
@@ -196,9 +159,7 @@ export default function App() {
         lastUpdated={currentLastUpdated}
         loading={currentLoading}
         error={currentError}
-        onRefresh={handleRefresh}
         onExportCSV={handleExportCSV}
-        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -210,18 +171,10 @@ export default function App() {
               <p className="mt-1 leading-relaxed">{currentError}</p>
               <div className="mt-3 flex items-center flex-wrap gap-2.5">
                 <button
-                  onClick={handleRefresh}
+                  onClick={() => window.location.reload()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Thử tải lại</span>
-                </button>
-                <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 transition-colors"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>Kiểm tra / Đổi link Google Sheet</span>
+                  <span>Tải lại trang</span>
                 </button>
               </div>
             </div>
@@ -243,11 +196,10 @@ export default function App() {
               Bảng tính hiện tại chưa có dữ liệu hoặc bạn chưa cấu hình link Google Sheet.
             </p>
             <button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => window.location.reload()}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
             >
-              <Settings className="w-4 h-4" />
-              <span>Dán link Google Sheet để bắt đầu</span>
+              <span>Tải lại trang để thử lại</span>
             </button>
           </div>
         )}
@@ -286,15 +238,6 @@ export default function App() {
           Trường Đại học Y Dược Cần Thơ - Phòng Khoa học và Công nghệ
         </p>
       </footer>
-
-      <SheetSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        sheet1Url={sheet1Url}
-        sheet2Url={sheet2Url}
-        onSaveUrls={handleSaveUrls}
-        onResetDefaults={handleResetDefaults}
-      />
     </div>
   );
 }

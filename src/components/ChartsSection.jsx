@@ -73,7 +73,7 @@ const TOP_AUTHOR_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
 // ── Tooltip styles ──────────────────────────────────────────────────────────
 const tooltipStyle = {
   backgroundColor: '#FFFFFF',
-  border: '1px solid #E2E8F0',
+  borderColor: '#E2E8F0',
   borderRadius: '8px',
   color: '#0F172A',
   fontSize: '12px',
@@ -100,7 +100,7 @@ function extractQuarter(record) {
   }
 
   // 2. Trích xuất tháng từ các format ngày
-  
+
   // 2a. Format ISO: YYYY-MM-DD
   if (!month) {
     const isoMatch = dateStr.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
@@ -129,7 +129,7 @@ function extractQuarter(record) {
   if (!month) {
     const mmYyMatch = dateStr.match(/\b(\d{1,2})[/.\-](\d{4})\b/);
     if (mmYyMatch) {
-       month = parseInt(mmYyMatch[1], 10);
+      month = parseInt(mmYyMatch[1], 10);
     }
   }
 

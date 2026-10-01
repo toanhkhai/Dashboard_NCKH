@@ -10,9 +10,6 @@ export const Header = ({
   lastUpdated = null,
   loading = false,
   error = null,
-  onRefresh,
-  onExportCSV,
-  onOpenSettings,
 }) => {
   const formatTime = (d) => {
     if (!d) return 'Chưa có';
@@ -52,29 +49,6 @@ export const Header = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-              title="Làm mới dữ liệu trực tiếp từ Google Sheets"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Đang nạp...' : 'Làm mới (Live Sync)'}</span>
-            </button>
-
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition-colors text-xs font-semibold cursor-pointer"
-                title="Dán link Google Sheet mới"
-              >
-                <Settings className="w-4 h-4" />
-                <span>Đổi link Sheet</span>
-              </button>
-            )}
-          </div>
         </div>
 
       </div>

@@ -65,8 +65,8 @@ export const GlobalFilterBar = ({
                 className="bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none w-full sm:w-auto"
               >
                 <option value="all">Tất cả Nguồn</option>
-                <option value="source1">Trong nước (HĐGS)</option>
-                <option value="source2">Quốc tế (Scopus/ISI)</option>
+                <option value="source1">Trong nước</option>
+                <option value="source2">Quốc tế</option>
               </select>
             </div>
           )}
@@ -104,42 +104,48 @@ export const GlobalFilterBar = ({
             </select>
           </div>
 
-          {/* Lọc Điểm (Source 1) hoặc Hạng Q (Source 2) */}
-          {!isSource2 ? (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5 shrink-0">
-                Điểm:
-              </label>
-              <select
-                value={filters.score}
-                onChange={(e) => handleChange('score', e.target.value)}
-                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none w-full sm:w-auto"
-              >
-                <option value="all">Mọi mốc điểm</option>
-                {availableScores.map((s) => (
-                  <option key={s} value={s}>{s} điểm</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5 shrink-0">
-                Hạng:
-              </label>
-              <select
-                value={filters.qRank}
-                onChange={(e) => handleChange('qRank', e.target.value)}
-                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none w-full sm:w-auto"
-              >
-                <option value="all">Mọi phân hạng</option>
-                <option value="Q1">Q1</option>
-                <option value="Q2">Q2</option>
-                <option value="Q3">Q3</option>
-                <option value="Q4">Q4</option>
-                <option value="Khác">Khác / Chưa rõ</option>
-              </select>
-            </div>
-          )}
+          {/* Lọc Điểm / Hạng Q (Gộp chung) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5 shrink-0">
+              Điểm / Hạng Q:
+            </label>
+            <select
+              value={
+                filters.score !== 'all' ? `score_${filters.score}` :
+                filters.qRank !== 'all' ? `qrank_${filters.qRank}` :
+                'all'
+              }
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'all') {
+                  onFilterChange(prev => ({ ...prev, score: 'all', qRank: 'all' }));
+                } else if (val.startsWith('score_')) {
+                  onFilterChange(prev => ({ ...prev, score: val.replace('score_', ''), qRank: 'all' }));
+                } else if (val.startsWith('qrank_')) {
+                  onFilterChange(prev => ({ ...prev, score: 'all', qRank: val.replace('qrank_', '') }));
+                }
+              }}
+              className="bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none w-full sm:w-auto"
+            >
+              <option value="all">Mọi phân loại</option>
+              {(!isSource2 || isCombined) && (
+                <optgroup label="Điểm HĐGS (Trong nước)">
+                  {availableScores.map((s) => (
+                    <option key={`score-${s}`} value={`score_${s}`}>{s} điểm</option>
+                  ))}
+                </optgroup>
+              )}
+              {(isSource2 || isCombined) && (
+                <optgroup label="Phân Hạng (Quốc tế)">
+                  <option value="qrank_Q1">Q1</option>
+                  <option value="qrank_Q2">Q2</option>
+                  <option value="qrank_Q3">Q3</option>
+                  <option value="qrank_Q4">Q4</option>
+                  <option value="qrank_Khác">Khác / Chưa rõ</option>
+                </optgroup>
+              )}
+            </select>
+          </div>
 
         </div>
       </div>

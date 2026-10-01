@@ -24,7 +24,9 @@ export const DataTable = ({ records = [], loading = false }) => {
     return list.sort((a, b) => {
       let comparison = 0;
       if (sortField === 'score') {
-        comparison = (Number(a.score) || 0) - (Number(b.score) || 0);
+        const valA = a.sourceType === 'source2' ? (a.qRank || 'Khác') : (Number(a.score) || 0);
+        const valB = b.sourceType === 'source2' ? (b.qRank || 'Khác') : (Number(b.score) || 0);
+        comparison = String(valA).localeCompare(String(valB));
       } else if (sortField === 'publishDate') {
         const dateA = a.publishDate || a.publishYear || '';
         const dateB = b.publishDate || b.publishYear || '';
@@ -282,10 +284,10 @@ export const DataTable = ({ records = [], loading = false }) => {
       {/* Modal Thẩm định Chi tiết Hồ sơ */}
       {selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col relative overflow-hidden">
             
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 shrink-0 bg-white z-10">
               <h3 className="text-lg font-bold text-slate-900">
                 Chi Tiết Hồ Sơ Bài Báo
               </h3>
@@ -299,7 +301,7 @@ export const DataTable = ({ records = [], loading = false }) => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto">
               <div className="mb-6">
                 <p className="text-sm text-slate-500 mb-1">Tên bài báo</p>
                 <h4 className="text-lg font-semibold text-slate-900 leading-snug">
@@ -387,14 +389,16 @@ export const DataTable = ({ records = [], loading = false }) => {
               {selectedRecord.rawRecord && Object.keys(selectedRecord.rawRecord).length > 0 && (
                 <div className="mt-6 pt-4 border-t border-slate-200">
                   <span className="text-sm font-medium text-slate-700 block mb-3">
-                    Dữ liệu thô từ Google Sheet:
+                    Dữ liệu thô từ Google Sheet (đã ẩn các trường trống):
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm">
-                    {Object.entries(selectedRecord.rawRecord).map(([key, val], i) => (
-                      <div key={i} className="flex flex-col bg-white p-2.5 rounded border border-slate-200">
-                        <span className="text-xs text-slate-500 font-medium mb-0.5">{key}</span>
-                        <span className="text-slate-800 break-words">{String(val || '—')}</span>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm">
+                    {Object.entries(selectedRecord.rawRecord)
+                      .filter(([_, val]) => val !== null && val !== undefined && String(val).trim() !== '')
+                      .map(([key, val], i) => (
+                        <div key={i} className="flex flex-col bg-white p-2.5 rounded border border-slate-200">
+                          <span className="text-xs text-slate-500 font-medium mb-0.5">{key}</span>
+                          <span className="text-slate-800 break-words">{String(val)}</span>
+                        </div>
                     ))}
                   </div>
                 </div>
@@ -402,10 +406,17 @@ export const DataTable = ({ records = [], loading = false }) => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-b-xl">
-              <span className="text-sm text-slate-500">
-                Email: {selectedRecord.email || '—'}
-              </span>
+            <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto text-center sm:text-left">
+                <span className="text-sm font-semibold text-slate-700">Email Tác giả:</span>
+                {selectedRecord.email ? (
+                  <a href={`mailto:${selectedRecord.email}`} className="text-sm font-bold text-blue-700 hover:text-blue-800 hover:underline px-3 py-1.5 bg-blue-100 border border-blue-200 rounded-md transition-colors break-all">
+                    {selectedRecord.email}
+                  </a>
+                ) : (
+                  <span className="text-sm text-slate-500 italic px-3 py-1.5 bg-white border border-slate-200 rounded-md">Chưa có thông tin</span>
+                )}
+              </div>
               {selectedRecord.proofLinks && selectedRecord.proofLinks.length > 0 ? (
                 <a
                   href={selectedRecord.proofLinks[0]}
@@ -417,7 +428,7 @@ export const DataTable = ({ records = [], loading = false }) => {
                   Mở Minh Chứng PDF
                 </a>
               ) : (
-                <span className="text-sm text-slate-400 italic">Không có link minh chứng</span>
+                <span className="text-sm text-slate-400 italic">Không có minh chứng</span>
               )}
             </div>
 

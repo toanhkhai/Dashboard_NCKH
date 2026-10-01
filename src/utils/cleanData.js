@@ -346,10 +346,20 @@ export function cleanRawRecord(row, index, forcedSource) {
   let { score, display: scoreDisplay } = scoreKey ? extractScore(row[scoreKey]) : { score: 0, display: '0' };
 
   // 5. Ngày xuất bản / Thời gian
-  const dateKey = findColKey(row, [
+  const dateCandidates = [
     'ngày, tháng, năm', 'ngày xuất bản', 'ngày công bố', 'ngày', 'date',
-    'thời gian xuất bản', 'thời gian', 'năm', 'year', 'năm xuất bản', 'thời điểm'
-  ]);
+    'thời gian xuất bản', 'năm', 'year', 'năm xuất bản'
+  ];
+  // Explicitly avoid timestamp columns for the publish date
+  const dateKey = dateCandidates.reduce((acc, candidate) => {
+    if (acc) return acc;
+    const found = findColKey(row, [candidate]);
+    if (found && !normalizeStr(found).includes('dau thoi gian') && !normalizeStr(found).includes('timestamp')) {
+      return found;
+    }
+    return undefined;
+  }, undefined);
+
   const { year: publishYear, fullDate: publishDate } = dateKey ? extractYear(row[dateKey]) : { year: 'Chưa rõ', fullDate: '' };
 
   // 6. Nhóm tác giả / Danh sách tác giả / Người thực hiện

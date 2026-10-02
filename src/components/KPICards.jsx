@@ -1,5 +1,4 @@
 import React from 'react';
-import { FileText, BookOpen, Users, ShieldCheck, CheckCircle2, Globe } from 'lucide-react';
 
 /**
  * ============================================================================

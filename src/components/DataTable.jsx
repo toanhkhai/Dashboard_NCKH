@@ -21,16 +21,75 @@ export const DataTable = ({ records = [], loading = false }) => {
   // Logic sắp xếp
   const sortedRecords = useMemo(() => {
     const list = [...records];
+    
+    // Helper parse ngày để sắp xếp chính xác
+    const parseDate = (dString) => {
+      if (!dString) return 0;
+      const str = String(dString).trim();
+      
+      // Pattern: DD/MM/YYYY
+      let match = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+      if (match) {
+         const day = parseInt(match[1], 10);
+         const month = parseInt(match[2], 10) - 1;
+         const year = parseInt(match[3], 10);
+         return new Date(year, month, day).getTime();
+      }
+      
+      // Pattern: YYYY-MM-DD
+      match = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+      if (match) {
+         const year = parseInt(match[1], 10);
+         const month = parseInt(match[2], 10) - 1;
+         const day = parseInt(match[3], 10);
+         return new Date(year, month, day).getTime();
+      }
+      
+      // Pattern: MM/YYYY
+      match = str.match(/^(\d{1,2})[\/\-\.](\d{4})/);
+      if (match) {
+         const month = parseInt(match[1], 10) - 1;
+         const year = parseInt(match[2], 10);
+         return new Date(year, month, 1).getTime();
+      }
+
+      // Pattern: YYYY
+      match = str.match(/^(\d{4})/);
+      if (match) {
+         return new Date(parseInt(match[1], 10), 0, 1).getTime();
+      }
+
+      // Fallback
+      const t = new Date(str).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
     return list.sort((a, b) => {
       let comparison = 0;
       if (sortField === 'score') {
-        const valA = a.sourceType === 'source2' ? (a.qRank || 'Khác') : (Number(a.score) || 0);
-        const valB = b.sourceType === 'source2' ? (b.qRank || 'Khác') : (Number(b.score) || 0);
-        comparison = String(valA).localeCompare(String(valB));
+        // Hàm quy đổi điểm/hạng ra số để so sánh chính xác
+        const getScoreValue = (record) => {
+          if (record.sourceType === 'source2') {
+             const rank = record.qRank || 'Khác';
+             switch(rank) {
+               case 'Q1': return 100;
+               case 'Q2': return 90;
+               case 'Q3': return 80;
+               case 'Q4': return 70;
+               default: return 60; // Khác (Quốc tế không phân hạng)
+             }
+          } else {
+             // Điểm HĐGS thường từ 0 đến 2.5
+             return Number(record.score) || 0;
+          }
+        };
+        const valA = getScoreValue(a);
+        const valB = getScoreValue(b);
+        comparison = valA - valB;
       } else if (sortField === 'publishDate') {
-        const dateA = a.publishDate || a.publishYear || '';
-        const dateB = b.publishDate || b.publishYear || '';
-        comparison = String(dateA).localeCompare(String(dateB));
+        const timeA = parseDate(a.publishDate || a.publishYear);
+        const timeB = parseDate(b.publishDate || b.publishYear);
+        comparison = timeA - timeB;
       } else if (sortField === 'title') {
         comparison = String(a.title || '').localeCompare(String(b.title || ''));
       } else if (sortField === 'journal') {
@@ -39,6 +98,11 @@ export const DataTable = ({ records = [], loading = false }) => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
   }, [records, sortField, sortOrder]);
+
+  // Đặt lại trang 1 nếu thay đổi dữ liệu (ví dụ: tìm kiếm, lọc)
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [records]);
 
   // Logic phân trang
   const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
@@ -118,24 +182,13 @@ export const DataTable = ({ records = [], loading = false }) => {
           <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider">
             <tr>
               <th className="py-3 px-2 text-center w-[4%] truncate" title="STT">STT</th>
-              <th
-                onClick={() => handleSort('title')}
-                className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-[30%]"
-              >
-                <div className="flex items-center gap-1.5 truncate" title="Tên bài báo">
-                  <span className="truncate">Tên bài báo</span>
-                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 shrink-0" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50 shrink-0" />}
-                </div>
+              <th className="py-3 px-3 w-[25%] truncate" title="Tên bài báo">
+                Tên bài báo
               </th>
-              <th className="py-3 px-3 w-[15%] truncate" title="Tác giả liên hệ">Tác giả liên hệ</th>
-              <th
-                onClick={() => handleSort('journal')}
-                className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-[23%]"
-              >
-                <div className="flex items-center gap-1.5 truncate" title="Tạp chí / Kỷ yếu">
-                  <span className="truncate">Tạp chí / Kỷ yếu</span>
-                  {sortField === 'journal' ? (sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 shrink-0" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50 shrink-0" />}
-                </div>
+              <th className="py-3 px-3 w-[12%] truncate" title="Tác giả chính">Tác giả chính</th>
+              <th className="py-3 px-3 w-[12%] truncate" title="Tác giả liên hệ">Tác giả liên hệ</th>
+              <th className="py-3 px-3 w-[19%] truncate" title="Tạp chí / Kỷ yếu">
+                Tạp chí / Kỷ yếu
               </th>
               <th
                 onClick={() => handleSort('score')}
@@ -200,8 +253,13 @@ export const DataTable = ({ records = [], loading = false }) => {
                       </div>
                     </td>
 
+                    {/* Tác giả chính */}
+                    <td className="py-3 px-3 text-slate-700 text-sm break-words" title={item.mainAuthor}>
+                      {item.mainAuthor}
+                    </td>
+
                     {/* Tác giả liên hệ */}
-                    <td className="py-3 px-3 text-slate-700 truncate" title={item.correspondingAuthor || '—'}>
+                    <td className="py-3 px-3 text-slate-700 text-sm break-words" title={item.correspondingAuthor || '—'}>
                       {item.correspondingAuthor || '—'}
                     </td>
 
@@ -317,13 +375,19 @@ export const DataTable = ({ records = [], loading = false }) => {
                   </span>
                 </div>
                 <div>
+                  <span className="text-slate-500 block mb-1">Tác giả chính:</span>
+                  <span className="font-medium text-slate-800">{selectedRecord.mainAuthor}</span>
+                </div>
+                <div>
                   <span className="text-slate-500 block mb-1">Tác giả liên hệ:</span>
                   <span className="font-medium text-slate-800">{selectedRecord.correspondingAuthor || '—'}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 block mb-1">Điểm / Hạng Q:</span>
                   <span className="font-medium text-slate-800">
-                    {selectedRecord.sourceType === 'source2' && selectedRecord.qRank ? selectedRecord.qRank : getScoreBadge(selectedRecord.score, selectedRecord.scoreDisplay)}
+                    {selectedRecord.sourceType === 'source2' 
+                       ? (selectedRecord.qRank || 'Khác / Chưa rõ') 
+                       : getScoreBadge(selectedRecord.score, selectedRecord.scoreDisplay)}
                   </span>
                 </div>
                 <div>
@@ -387,10 +451,12 @@ export const DataTable = ({ records = [], loading = false }) => {
 
               {/* Tất cả các cột từ Google Sheet gốc */}
               {selectedRecord.rawRecord && Object.keys(selectedRecord.rawRecord).length > 0 && (
-                <div className="mt-6 pt-4 border-t border-slate-200">
-                  <span className="text-sm font-medium text-slate-700 block mb-3">
-                    Dữ liệu thô từ Google Sheet (đã ẩn các trường trống):
-                  </span>
+                <div className="mt-6 pt-5 border-t border-slate-200">
+                  <div className="mb-4">
+                    <span className="inline-block text-sm font-semibold text-white bg-emerald-500 px-3 py-1.5 rounded shadow-sm">
+                      Dữ liệu thô từ Google Sheet (đã ẩn các trường trống):
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm">
                     {Object.entries(selectedRecord.rawRecord)
                       .filter(([_, val]) => val !== null && val !== undefined && String(val).trim() !== '')

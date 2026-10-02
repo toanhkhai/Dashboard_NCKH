@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
 import { exportToCleanCSV } from './utils/cleanData.js';
-import { convertToGvizUrl } from './utils/urlConverter.js';
 import { Header } from './components/Header.jsx';
 import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
@@ -19,7 +18,7 @@ export default function App() {
 
   const [filters, setFilters] = useState({
     search: '',
-    year: 'all',
+    year: '',
     score: 'all',
     journal: 'all',
     qRank: 'all',
@@ -84,11 +83,47 @@ export default function App() {
         }
       }
 
-      if (filters.year !== 'all') {
-        if (String(record.publishYear) !== filters.year) return false;
+      if (filters.year && filters.year !== 'all') {
+        const query = String(filters.year).trim();
+        if (query) {
+          const recYearStr = String(record.publishYear || '').trim();
+          const recYearNum = parseInt(recYearStr, 10);
+
+          // Hỗ trợ lọc theo khoảng năm: VD "2020-2024" hoặc "2020 - 2024"
+          const rangeMatch = query.match(/^(\d{4})\s*[-–—:]\s*(\d{4})$/);
+          // Hỗ trợ so sánh: VD ">=2020", ">2020", "<=2024", "<2024"
+          const gteMatch = query.match(/^(?:>=|>)\s*(\d{4})$/);
+          const lteMatch = query.match(/^(?:<=|<)\s*(\d{4})$/);
+
+          if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            const min = Math.min(start, end);
+            const max = Math.max(start, end);
+            if (isNaN(recYearNum) || recYearNum < min || recYearNum > max) {
+              return false;
+            }
+          } else if (gteMatch) {
+            const threshold = parseInt(gteMatch[1], 10);
+            const isStrict = query.startsWith('>');
+            if (isNaN(recYearNum) || (isStrict ? recYearNum <= threshold : recYearNum < threshold)) {
+              return false;
+            }
+          } else if (lteMatch) {
+            const threshold = parseInt(lteMatch[1], 10);
+            const isStrict = query.startsWith('<');
+            if (isNaN(recYearNum) || (isStrict ? recYearNum >= threshold : recYearNum > threshold)) {
+              return false;
+            }
+          } else {
+            // So sánh chính xác năm (Ví dụ: gõ "1" thì tìm đúng năm "1" -> 0 kết quả; gõ "2025" -> ra đúng năm 2025)
+            if (recYearStr !== query) return false;
+          }
+        }
       }
 
       if (filters.score !== 'all') {
+        if (record.sourceType === 'source2' && Number(record.score) === 0) return false;
         const targetScore = parseFloat(filters.score);
         if (Math.abs(Number(record.score) - targetScore) > 0.01) return false;
       }
@@ -98,7 +133,12 @@ export default function App() {
       }
 
       if (filters.qRank !== 'all') {
-        if (record.qRank !== filters.qRank) return false;
+        if (filters.qRank === 'Khác') {
+          if (record.sourceType !== 'source2') return false;
+          if (['Q1', 'Q2', 'Q3', 'Q4'].includes(record.qRank)) return false;
+        } else {
+          if (record.qRank !== filters.qRank) return false;
+        }
       }
 
       if (filters.sourceType && filters.sourceType !== 'all') {

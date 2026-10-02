@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, Download, Settings, Database, Sparkles, Layers, Wifi, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const Header = ({
   activeTab = 'source1',

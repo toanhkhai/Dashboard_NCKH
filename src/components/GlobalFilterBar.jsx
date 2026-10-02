@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Filter, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 export const GlobalFilterBar = ({
   filters,
@@ -76,15 +76,26 @@ export const GlobalFilterBar = ({
             <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5 shrink-0">
               Năm XB:
             </label>
-            <input
-              type="number"
-              placeholder="Nhập năm..."
-              value={filters.year === 'all' ? '' : filters.year}
-              onChange={(e) => handleChange('year', e.target.value || 'all')}
-              className="bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 px-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none w-full sm:w-[100px]"
-              min="1900"
-              max="2100"
-            />
+            <div className="relative flex items-center w-full sm:w-[105px]">
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="VD: 2026"
+                value={filters.year === 'all' ? '' : filters.year}
+                onChange={(e) => handleChange('year', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs py-2 pl-2.5 pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder:text-slate-400"
+              />
+              {filters.year && filters.year !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => handleChange('year', '')}
+                  title="Xóa lọc năm (hiển thị tất cả)"
+                  className="absolute right-1 p-1 text-slate-400 hover:text-slate-600 focus:outline-none rounded hover:bg-slate-200 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Lọc Tạp chí */}

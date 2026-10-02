@@ -24,20 +24,51 @@ export function normalizeStr(str) {
     .trim();
 }
 
+const colKeyCache = new Map();
+
 /**
  * Tìm tên cột trong đối tượng hàng dữ liệu khớp với danh sách từ khóa ứng viên
  * @param {Record<string, any>} row 
  * @param {string[]} candidates 
+ * @param {string[]} [excludes=[]] Danh sách từ khóa cần loại trừ (để tránh nhầm lẫn)
  * @returns {string | undefined}
  */
-export function findColKey(row, candidates) {
+export function findColKey(row, candidates, excludes = []) {
   if (!row || typeof row !== 'object') return undefined;
   const keys = Object.keys(row);
+  const cacheKey = keys.join('|') + '###' + candidates.join('|') + '###' + excludes.join('|');
+
+  if (colKeyCache.has(cacheKey)) {
+    return colKeyCache.get(cacheKey);
+  }
+
+  // Lọc bỏ các key chứa từ khóa cấm
+  const validKeys = keys.filter((k) => {
+    const normK = normalizeStr(k);
+    return !excludes.some((ex) => normK.includes(normalizeStr(ex)));
+  });
+
+  // Bước 1: Ưu tiên tìm khớp CHÍNH XÁC (tuyệt đối)
   for (const candidate of candidates) {
     const normCand = normalizeStr(candidate);
-    const found = keys.find((k) => normalizeStr(k).includes(normCand));
-    if (found) return found;
+    const exactMatch = validKeys.find((k) => normalizeStr(k) === normCand);
+    if (exactMatch) {
+      colKeyCache.set(cacheKey, exactMatch);
+      return exactMatch;
+    }
   }
+
+  // Bước 2: Nếu không khớp chính xác, mới tìm dạng chuỗi con (includes)
+  for (const candidate of candidates) {
+    const normCand = normalizeStr(candidate);
+    const found = validKeys.find((k) => normalizeStr(k).includes(normCand));
+    if (found) {
+      colKeyCache.set(cacheKey, found);
+      return found;
+    }
+  }
+
+  colKeyCache.set(cacheKey, undefined);
   return undefined;
 }
 
@@ -321,7 +352,7 @@ export function cleanRawRecord(row, index, forcedSource) {
     'khoa', 'phòng', 'bộ môn', 'chuyên ngành', 'danh mục', 'category', 'cơ quan', 'tổ chức'
   ]);
   let rawJournal = journalKey && row[journalKey] ? String(row[journalKey]) : '';
-  
+
   // Nếu không tìm thấy, thử tìm cột thứ 2 có văn bản
   if (!rawJournal) {
     const secondTextEntry = entries.find(([k, v]) => {
@@ -363,11 +394,13 @@ export function cleanRawRecord(row, index, forcedSource) {
   const { year: publishYear, fullDate: publishDate } = dateKey ? extractYear(row[dateKey]) : { year: 'Chưa rõ', fullDate: '' };
 
   // 6. Nhóm tác giả / Danh sách tác giả / Người thực hiện
+  // Loại trừ các cột ghi rõ là "tác giả chính" hoặc "liên hệ" để tránh nhận nhầm
   const authorsKey = findColKey(row, [
-    'nhóm tác giả', 'danh sách tác giả', 'tác giả', 'authors', 'author',
-    'họ và tên', 'họ tên', 'người thực hiện', 'chủ nhiệm', 'thành viên',
-    'họ và tên người nhập', 'người nhập', 'cán bộ', 'nhân sự'
-  ]);
+    'tất cả tác giả', 'tập thể tác giả', 'danh sách tác giả', 'nhóm tác giả',
+    'tác giả', 'authors', 'author', 'họ và tên', 'họ tên',
+    'người thực hiện', 'chủ nhiệm', 'thành viên', 'họ và tên người nhập',
+    'người nhập', 'cán bộ', 'nhân sự'
+  ], ['chính', 'liên hệ', 'đứng đầu', 'chịu trách nhiệm', 'corresponding', 'first']);
   const authors = authorsKey ? parseAuthors(row[authorsKey]) : [];
   const authorCount = authors.length || 1;
 
@@ -383,6 +416,13 @@ export function cleanRawRecord(row, index, forcedSource) {
   if (!correspondingAuthor && authors.length > 0) {
     correspondingAuthor = authors[0];
   }
+
+  // 7.5. Tác giả chính
+  const mainAuthorKey = findColKey(row, [
+    'tác giả chính (tác giả đầu tiên)', 'tác giả chính', 'main author', 'first author', 'tác giả đứng đầu'
+  ]);
+  let mainAuthor = mainAuthorKey && row[mainAuthorKey] ? String(row[mainAuthorKey]).trim() : '';
+  mainAuthor = mainAuthor.replace(/[0-9*†‡§]+/g, '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
 
   // 8. Minh chứng & Link URL:
   // Quét cả cột minh chứng VÀ quét toàn bộ các cột trong hàng để tìm bất kỳ link URL nào (Google Drive, Dropbox, DOI, v.v.)
@@ -453,6 +493,7 @@ export function cleanRawRecord(row, index, forcedSource) {
     authors,
     authorCount,
     correspondingAuthor: correspondingAuthor || 'Chưa cập nhật',
+    mainAuthor: mainAuthor || 'null',
     volumeIssuePage,
     proofLinks,
     category,
@@ -497,6 +538,7 @@ export function exportToCleanCSV(records, filename = 'CTUMP_NCKH_Cleaned.csv') {
     'STT',
     'Nguồn Dữ Liệu',
     'Tên Bài Báo',
+    'Tác Giả Chính',
     'Tác Giả Liên Hệ',
     'Tên Tạp Chí / Kỷ Yếu',
     'Điểm HĐGS',
@@ -516,6 +558,7 @@ export function exportToCleanCSV(records, filename = 'CTUMP_NCKH_Cleaned.csv') {
     i + 1,
     r.sourceType === 'source1' ? 'Trong nước (Ngoài trường - HĐGS)' : 'Quốc tế (Scopus/ISI & Mở rộng)',
     `"${(r.title || '').replace(/"/g, '""')}"`,
+    `"${(r.mainAuthor || '').replace(/"/g, '""')}"`,
     `"${(r.correspondingAuthor || '').replace(/"/g, '""')}"`,
     `"${(r.journal || '').replace(/"/g, '""')}"`,
     r.score,

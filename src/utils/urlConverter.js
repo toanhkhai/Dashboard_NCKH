@@ -134,8 +134,3 @@ export function parseGoogleSheetUrl(rawUrl) {
   };
 }
 
-export function convertToGvizUrl(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== 'string') return '';
-  const parsed = parseGoogleSheetUrl(rawUrl);
-  return parsed.primaryUrl || rawUrl.trim();
-}

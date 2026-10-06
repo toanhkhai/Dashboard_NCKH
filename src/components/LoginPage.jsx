@@ -154,17 +154,16 @@ export function LoginPage() {
           <div className="space-y-4">
             {isConfigured ? (
               <div className="flex flex-col items-center">
+                {isLoadingGsi && (
+                  <div className="text-xs text-slate-400 flex items-center gap-2 py-3">
+                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    <span>Đang nạp nút Google Sign-In...</span>
+                  </div>
+                )}
                 <div
                   ref={googleButtonRef}
                   className="min-h-[44px] flex items-center justify-center w-full"
-                >
-                  {isLoadingGsi && (
-                    <div className="text-xs text-slate-400 flex items-center gap-2 py-2">
-                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      <span>Đang nạp nút Google Sign-In...</span>
-                    </div>
-                  )}
-                </div>
+                />
                 <p className="text-[11px] text-slate-400 mt-3 text-center">
                   Hỗ trợ tài khoản Gmail cá nhân và Google Workspace trường học (<span className="text-slate-300 font-mono">@ctump.edu.vn</span>)
                 </p>

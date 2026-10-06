@@ -4,6 +4,40 @@ Tài liệu này hướng dẫn chi tiết từng bước tạo và cấu hình 
 
 ---
 
+## ⚠️ GIẢI QUYẾT VẤN ĐỀ: DÙNG GMAIL CÁ NHÂN & CHỌN EXTERNAL
+
+### 1. Tại sao Google không cho chọn "Internal"?
+* Google chỉ cho phép chọn **Internal** (Nội bộ) khi tài khoản bạn dùng để đăng nhập vào Google Cloud Console là **tài khoản Google Workspace của trường** (`...ctump.edu.vn`).
+* Khi bạn dùng **Gmail cá nhân** (`...gmail.com`), Google **bắt buộc chọn External** (Ngoài tổ chức).
+
+### 2. Làm sao để "Chỉ có Gmail CTUMP được vào login" khi chọn External?
+* Khi chọn **External**, Google sẽ cho phép mở bảng chọn tài khoản Google.
+* **Hệ thống web của chúng ta đã được tích hợp bộ lọc kiểm tra tên miền tự động**:
+  * Khi người dùng đăng nhập bằng tài khoản `@ctump.edu.vn` hoặc `@student.ctump.edu.vn` (hoặc tài khoản trong danh sách Whitelist): Hệ thống chấp nhận đăng nhập.
+  * Nếu người dùng chọn bất kỳ tài khoản Gmail cá nhân nào khác (`@gmail.com`): Hệ thống sẽ **từ chối đăng nhập ngay lập tức, hiển thị thông báo lỗi màu đỏ và ngắt phiên**.
+  * Vì vậy, bạn hoàn toàn yên tâm chọn **External** mà vẫn đảm bảo 100% chỉ có người của CTUMP mới đăng nhập được vào hệ thống!
+
+### 3. Tại sao web hiện tại đang bị lỗi Login và cách sửa ngay lập tức?
+Khi bạn chọn **External**, Google Cloud sẽ để ứng dụng ở chế độ **Testing (Thử nghiệm)**:
+👉 Ở chế độ Testing, Google sẽ **chặn tất cả các email** nào không được khai báo trước trong danh sách **Test users** với thông báo lỗi: `Error 403: access_denied` hoặc `Access blocked`.
+
+**👉 CÁCH SỬA LỖI (Chọn 1 trong 2 cách):**
+
+* **Cách 1: Nhấn "PUBLISH APP" (Khuyên dùng - Để toàn bộ giảng viên CTUMP đăng nhập được)**
+  1. Vào Google Cloud Console > **APIs & Services** > **OAuth consent screen**.
+  2. Dưới mục **Publishing status**, bạn nhấn nút **PUBLISH APP** (Xuất bản ứng dụng) > Chọn **Confirm**.
+  3. Trạng thái sẽ chuyển thành **In production**.
+  4. *Lưu ý:* Vì ứng dụng chỉ sử dụng quyền đọc cơ bản (`email`, `profile`, `openid`), Google cho phép Publish ngay lập tức mà **KHÔNG CẦN xác minh (Verification) phức tạp**.
+  5. Sau khi Publish, mọi email `@ctump.edu.vn` đều có thể đăng nhập bình thường!
+
+* **Cách 2: Thêm email vào mục "Test users" (Nếu vẫn muốn giữ ở chế độ Testing)**
+  1. Vào **APIs & Services** > **OAuth consent screen**.
+  2. Kéo xuống mục **Test users** > Nhấn **+ ADD USERS**.
+  3. Nhập địa chỉ email trường `@ctump.edu.vn` mà bạn đang dùng để thử đăng nhập.
+  4. Nhấn **Save**. Lúc này tài khoản đó sẽ được Google cho phép đăng nhập thử nghiệm.
+
+---
+
 ## 📌 Tổng Quan Các Thông Số Cần Chuẩn Bị
 
 | Thông số | Giá trị cấu hình | Ghi chú |
@@ -21,12 +55,11 @@ Tài liệu này hướng dẫn chi tiết từng bước tạo và cấu hình 
 ### BƯỚC 1: Truy Cập Google Cloud Console & Tạo Project Mới
 
 1. Mở trình duyệt và truy cập: [Google Cloud Console](https://console.cloud.google.com/)
-2. Đăng nhập bằng tài khoản Google của bạn (nên dùng tài khoản Gmail quản trị hoặc email Google Workspace của trường).
+2. Đăng nhập bằng tài khoản Google của bạn.
 3. Nhấp vào thanh chọn dự án (Project dropdown) ở góc trên bên trái thanh điều hướng (kế bên logo Google Cloud).
 4. Nhấn nút **New Project** (Dự án mới) ở góc trên bên phải của bảng chọn.
 5. Điền thông tin:
    - **Project Name:** Nhập `CTUMP-Dashboard-NCKH`
-   - **Organization:** Để mặc định hoặc chọn tổ chức của bạn.
 6. Nhấn nút **Create** (Tạo) và chờ vài giây để Google tạo xong dự án.
 7. Chọn dự án vừa tạo trên thanh điều hướng.
 
@@ -34,28 +67,24 @@ Tài liệu này hướng dẫn chi tiết từng bước tạo và cấu hình 
 
 ### BƯỚC 2: Cấu Hình Màn Hình Chấp Thuận OAuth (OAuth Consent Screen)
 
-Google yêu cầu thiết lập màn hình này trước khi tạo Client ID để người dùng biết ứng dụng nào đang yêu cầu truy cập thông tin họ tên và email.
-
 1. Tại menu thanh bên trái (Navigation menu ☰), vào:
    👉 **APIs & Services** > **OAuth consent screen** (Màn hình chấp thuận OAuth).
 2. Tại mục **User Type**:
-   - Nếu bạn dùng tài khoản Google cá nhân thông thường: Chọn **External** (Ngoài tổ chức).
-   - Nếu bạn dùng Google Workspace có tên miền trường (`@ctump.edu.vn`): Chọn **Internal** (Nội bộ tổ chức) hoặc **External**.
+   - Chọn **External** (Ngoài tổ chức).
    - Nhấn **Create**.
 3. Điền các thông tin cơ bản:
    - **App name (Tên ứng dụng):** `CTUMP Dashboard NCKH`
    - **User support email (Email hỗ trợ người dùng):** Chọn email của bạn.
-   - **App logo:** Có thể bỏ qua hoặc tải ảnh logo CTUMP lên.
    - **Developer contact information (Thông tin liên hệ nhà phát triển):** Nhập địa chỉ email của bạn.
 4. Nhấn nút **Save and Continue** (Lưu và tiếp tục).
 5. **Scopes (Phạm vi truy cập):**
-   - Mặc định Google Identity Services chỉ cần các phạm vi cơ bản (`userinfo.email`, `userinfo.profile`, `openid`).
-   - Bạn có thể giữ nguyên mặc định và nhấn **Save and Continue**.
-6. **Test Users (Người dùng thử nghiệm):**
-   - *Rất quan trọng nếu App đang ở trạng thái Testing (Thử nghiệm):*
-   - Nhấn **+ Add Users**, nhập địa chỉ Gmail của bạn và các email đồng nghiệp sẽ dùng để đăng nhập thử nghiệm.
+   - Giữ nguyên các quyền cơ bản mặc định (`userinfo.email`, `userinfo.profile`, `openid`).
    - Nhấn **Save and Continue**.
-7. Xem lại tóm tắt và nhấn **Back to Dashboard**.
+6. **Test Users (Người dùng thử nghiệm):**
+   - Nhấn **+ Add Users**, nhập địa chỉ email trường `@ctump.edu.vn` của bạn vào danh sách.
+   - Nhấn **Save and Continue**.
+7. Nhấn **Back to Dashboard**.
+8. **QUAN TRỌNG:** Nhấn nút **PUBLISH APP** (ở mục Publishing status) để chuyển sang chế độ **In production** giúp toàn thể cán bộ CTUMP đăng nhập được.
 
 ---
 
@@ -67,7 +96,7 @@ Google yêu cầu thiết lập màn hình này trước khi tạo Client ID đ�
    👉 **OAuth client ID**.
 3. Điền các trường cấu hình như sau:
    - **Application type (Loại ứng dụng):** Chọn **Web application** (Ứng dụng web).
-   - **Name (Tên):** Nhập `CTUMP Web Client` (hoặc tên tùy ý).
+   - **Name (Tên):** Nhập `CTUMP Web Client`.
 4. **Authorized JavaScript origins (Nguồn gốc JavaScript được ủy quyền):**
    - Nhấn **+ ADD URI** và nhập lần lượt các dòng sau:
      ```text
@@ -75,6 +104,9 @@ Google yêu cầu thiết lập màn hình này trước khi tạo Client ID đ�
      ```
      ```text
      http://localhost:5173
+     ```
+     ```text
+     http://localhost
      ```
      *(Nếu sau này bạn triển khai web lên Vercel, Netlify hoặc domain trường, ví dụ `https://nckh.ctump.edu.vn`, chỉ cần nhấn + ADD URI và thêm domain đó vào).*
 5. **Authorized redirect URIs (URI chuyển hướng được ủy quyền):**
@@ -86,36 +118,18 @@ Google yêu cầu thiết lập màn hình này trước khi tạo Client ID đ�
      http://localhost:5173
      ```
 6. Nhấn nút **CREATE** (Tạo).
-7. Hộp thoại **OAuth client created** sẽ xuất hiện:
-   - Sao chép chuỗi tại mục **Client ID** (chuỗi ký tự có đuôi `.apps.googleusercontent.com`).
-   - *(Bạn không cần dùng Client Secret vì đây là ứng dụng client-side SPA).*
+7. Sao chép chuỗi **Client ID** (chuỗi ký tự có đuôi `.apps.googleusercontent.com`).
 
 ---
 
-### BƯỚC 4: Kích Hoạt Client ID Vào Dự Án
+### BƯỚC 4: Điền Client ID Vào File .env
 
-Bạn có thể áp dụng 1 trong 2 cách sau:
-
-#### Cách 1: Thêm vào file `.env` (Khuyên dùng - Cố định lâu dài)
 1. Mở file `.env` ở thư mục gốc của dự án.
 2. Dán Client ID của bạn vào:
    ```env
    VITE_GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
    ```
-3. Khởi động lại dev server nếu đang chạy (`npm run dev`).
-
-#### Cách 2: Nhập trực tiếp trên giao diện Dashboard (Cực nhanh - Không cần restart)
-1. Mở trang web Dashboard trên trình duyệt (`http://localhost:3000`).
-2. Nhấn vào nút **"Cấu hình Google Cloud"** (hoặc **"Xem hướng dẫn & Nhập Client ID"**).
-3. Dán chuỗi Client ID vào ô input và nhấn **"Lưu & Kích hoạt"**.
-4. Nút đăng nhập Google chính thức sẽ hiển thị ngay lập tức!
-
----
-
-## 🔒 Các Tính Năng Đã Được Tích Hợp
-
-1. **Chuẩn Google Identity Services (GIS) mới nhất:** Không bị lỗi thời như các thư viện GAPI cũ, bảo mật cao và tương thích chuẩn HTML5.
-2. **Duy trì phiên đăng nhập (Persistent Session):** Thông tin đăng nhập được lưu an toàn trong trình duyệt (`localStorage`), khi F5 tải lại trang không cần đăng nhập lại.
-3. **Hiển thị thông tin người dùng:** Ở thanh Header hiển thị ảnh đại diện Google (Avatar), Họ tên và Email người dùng.
-4. **Hỗ trợ Đăng xuất an toàn:** Nhấn "Đăng xuất" sẽ xóa phiên và gọi `google.accounts.id.disableAutoSelect()`.
-5. **Chế độ Khách (Demo Mode):** Cho phép giảng viên hoặc người thẩm định truy cập nhanh để xem trước Dashboard khi chưa kịp thiết lập Google Cloud.
+3. Lưu file và khởi động lại dev server:
+   ```bash
+   npm run dev
+   ```

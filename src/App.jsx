@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
-import { LoginPage } from './components/LoginPage.jsx';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
 import { exportToCleanCSV, normalizeStr } from './utils/cleanData.js';
 import { Header } from './components/Header.jsx';
@@ -8,10 +7,17 @@ import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
 import { DataTable } from './components/DataTable.jsx';
 import { GlobalFilterBar } from './components/GlobalFilterBar.jsx';
-import { AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { GuestDataBanner } from './components/GuestDataBanner.jsx';
+import { PermissionManager } from './components/PermissionManager.jsx';
+import { LoginModal } from './components/LoginModal.jsx';
+import { AlertCircle, FileSpreadsheet, User, Info } from 'lucide-react';
 import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
 
-function DashboardContent() {
+export default function App() {
+  const { user, isGuest, isUser, isDelegated, isSuperAdmin, canViewFullData } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+
   const sheet1Url = DEFAULT_SHEET1_URL;
   const sheet2Url = DEFAULT_SHEET2_URL;
 
@@ -29,6 +35,7 @@ function DashboardContent() {
 
   const activeView = filters.sourceType === 'all' ? 'combined' : filters.sourceType;
 
+  // Dữ liệu dùng cho Biểu đồ & KPI (luôn tính toán đầy đủ cho mọi chế độ xem)
   const activeRecords = useMemo(() => {
     if (activeView === 'source1') return sheet1.data;
     if (activeView === 'source2') return sheet2.data;
@@ -69,6 +76,7 @@ function DashboardContent() {
       .map(([j]) => j);
   }, [activeRecords]);
 
+  // Bộ lọc dữ liệu chung (search, year, score, journal, qRank)
   const filteredRecords = useMemo(() => {
     return activeRecords.filter((record) => {
       if (filters.search.trim()) {
@@ -94,9 +102,7 @@ function DashboardContent() {
           const recYearStr = String(record.publishYear || '').trim();
           const recYearNum = parseInt(recYearStr, 10);
 
-          // Hỗ trợ lọc theo khoảng năm: VD "2020-2024" hoặc "2020 - 2024"
           const rangeMatch = query.match(/^(\d{4})\s*[-–—:]\s*(\d{4})$/);
-          // Hỗ trợ so sánh: VD ">=2020", ">2020", "<=2024", "<2024"
           const gteMatch = query.match(/^(?:>=|>)\s*(\d{4})$/);
           const lteMatch = query.match(/^(?:<=|<)\s*(\d{4})$/);
 
@@ -121,7 +127,6 @@ function DashboardContent() {
               return false;
             }
           } else {
-            // So sánh chính xác năm
             if (recYearStr !== query) return false;
           }
         }
@@ -153,6 +158,35 @@ function DashboardContent() {
       return true;
     });
   }, [activeRecords, filters]);
+
+  // PHÂN QUYỀN DỮ LIỆU BẢNG TRA CỨU (DataTable):
+  // - View 2 (User): Chỉ hiển thị các dòng có email tác giả khớp với email đang đăng nhập
+  // - View 3 (Delegated & Super Admin): Hiển thị toàn bộ dữ liệu (Full data)
+  const userFilteredRecords = useMemo(() => {
+    if (canViewFullData) {
+      return filteredRecords;
+    }
+
+    if (isUser && user?.email) {
+      const userEmailNorm = user.email.trim().toLowerCase();
+      return filteredRecords.filter((record) => {
+        // Kiểm tra trường record.email
+        if (record.email && record.email.trim().toLowerCase() === userEmailNorm) {
+          return true;
+        }
+        // Kiểm tra trường rawRecord xem có cột nào chứa email của người dùng không
+        if (record.rawRecord) {
+          const matchCol = Object.values(record.rawRecord).some((val) =>
+            typeof val === 'string' && val.trim().toLowerCase().includes(userEmailNorm)
+          );
+          if (matchCol) return true;
+        }
+        return false;
+      });
+    }
+
+    return [];
+  }, [filteredRecords, canViewFullData, isUser, user?.email]);
 
   const currentLoading =
     activeView === 'source1'
@@ -190,7 +224,8 @@ function DashboardContent() {
           ? 'MoRong_QuocTe'
           : 'TongHop';
     const filename = `CTUMP_Research_${tabName}_${new Date().toISOString().slice(0, 10)}.csv`;
-    exportToCleanCSV(filteredRecords, filename);
+    // Chỉ cho phép xuất tập dữ liệu mà user được quyền xem
+    exportToCleanCSV(userFilteredRecords, filename);
   };
 
   return (
@@ -205,9 +240,11 @@ function DashboardContent() {
         loading={currentLoading}
         error={currentError}
         onExportCSV={handleExportCSV}
+        onOpenPermissionManager={() => setShowPermissionModal(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Error notification */}
         {currentError && (
           <div className="mb-6 p-4 rounded-sm bg-red-50 border border-red-200 flex items-start gap-3.5 text-red-800 text-xs sm:text-sm shadow-sm">
             <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
@@ -233,24 +270,9 @@ function DashboardContent() {
           </div>
         )}
 
-        {!currentLoading && activeRecords.length === 0 && !currentError && (
-          <div className="my-12 text-center p-8 bg-white border border-slate-200 max-w-lg mx-auto shadow-sm">
-            <FileSpreadsheet className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-60" />
-            <h3 className="text-base font-bold text-slate-800 mb-1">Chưa có dữ liệu từ Google Sheet</h3>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Bảng tính hiện tại chưa có dữ liệu hoặc bạn chưa cấu hình link Google Sheet.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
-            >
-              <span>Tải lại trang để thử lại</span>
-            </button>
-          </div>
-        )}
-
         {activeRecords.length > 0 && (
           <>
+            {/* Bộ lọc chung */}
             <GlobalFilterBar
               filters={filters}
               onFilterChange={setFilters}
@@ -261,6 +283,7 @@ function DashboardContent() {
               isCombined={true}
             />
 
+            {/* BIỂU ĐỒ & KPI (KPICards, ChartsSection): HIỂN THỊ ĐẦY ĐỦ CHO TẤT CẢ CÁC VIEW */}
             <KPICards
               records={filteredRecords}
               isSource2={activeView === 'source2'}
@@ -270,10 +293,48 @@ function DashboardContent() {
 
             <ChartsSection records={filteredRecords} activeTab={activeView} />
 
-            <DataTable
-              records={filteredRecords}
-              loading={currentLoading}
-            />
+            {/* BẢNG TRA CỨU (DataTable):
+                - View 1 (Guest): Ẩn hoàn toàn -> Hiện GuestDataBanner yêu cầu đăng nhập
+                - View 2 (User): Chỉ hiển thị các dòng có email tác giả khớp với user đang login
+                - View 3 (Delegated & Super Admin): Hiển thị toàn bộ dữ liệu (Full data)
+            */}
+            {isGuest ? (
+              <GuestDataBanner onOpenLogin={() => setShowLoginModal(true)} />
+            ) : (
+              <div className="space-y-3">
+                {/* Thông báo trạng thái phân quyền View 2 (User) */}
+                {isUser && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>
+                        <strong>Chế độ Cán bộ nghiên cứu:</strong> Đang hiển thị{' '}
+                        <strong className="text-blue-700">{userFilteredRecords.length}</strong> bài báo
+                        khớp với tài khoản email <strong>{user?.email}</strong>.
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-blue-600 font-medium hidden sm:inline">
+                      (Chỉ bạn mới xem được danh mục bài báo của mình)
+                    </span>
+                  </div>
+                )}
+
+                {/* Thông báo trạng thái phân quyền View 3 (Delegated / Super Admin) */}
+                {canViewFullData && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
+                    <Info className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      <strong>Quyền xem toàn bộ:</strong> Đang hiển thị danh mục đầy đủ ({userFilteredRecords.length} công trình) theo quyền {isSuperAdmin ? 'Super Admin' : 'Ủy quyền'}.
+                    </span>
+                  </div>
+                )}
+
+                <DataTable
+                  records={userFilteredRecords}
+                  loading={currentLoading}
+                />
+              </div>
+            )}
           </>
         )}
       </main>
@@ -283,16 +344,18 @@ function DashboardContent() {
           Trường Đại học Y Dược Cần Thơ - Phòng Khoa học và Công nghệ
         </p>
       </footer>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
+
+      {/* Permission Manager Modal (Super Admin) */}
+      <PermissionManager
+        isOpen={showPermissionModal}
+        onClose={() => setShowPermissionModal(false)}
+      />
     </div>
   );
-}
-
-export default function App() {
-  const { isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
-
-  return <DashboardContent />;
 }

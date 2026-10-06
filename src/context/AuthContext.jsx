@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import initialWhitelist from '../data/whitelist.json';
 
 // Khởi tạo Context
 const AuthContext = createContext(null);
 
 const STORAGE_USER_KEY = 'ctump_auth_user';
 const STORAGE_CLIENT_ID_KEY = 'ctump_google_client_id';
+const STORAGE_WHITELIST_KEY = 'ctump_auth_whitelist';
 
 /**
  * Hàm giải mã JWT an toàn hỗ trợ đầy đủ ký tự UTF-8 (tiếng Việt có dấu)
@@ -28,8 +30,9 @@ export function parseJwt(token) {
 }
 
 export function AuthProvider({ children }) {
-  // Lấy Client ID từ file .env hoặc localStorage (nếu người dùng nhập trực tiếp trên UI)
-  const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  // Lấy Client ID từ file .env, biến môi trường Cloudflare hoặc Client ID mặc định
+  const DEFAULT_CLIENT_ID = '155584685837-ggv7pj77tb2r1entrs988ocg5qvmpp4t.apps.googleusercontent.com';
+  const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
   const [clientId, setClientId] = useState(() => {
     const saved = localStorage.getItem(STORAGE_CLIENT_ID_KEY);
     return saved || envClientId;
@@ -44,6 +47,116 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
+
+  // State danh sách phân quyền (Whitelist)
+  const [whitelist, setWhitelist] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_WHITELIST_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...initialWhitelist,
+          ...parsed,
+          // Luôn ưu tiên superAdmin mới nhất từ file whitelist.json trong mã nguồn
+          superAdmin: initialWhitelist.superAdmin || parsed.superAdmin || 'chuyendoiso@ctump.edu.vn',
+          delegatedEmails: Array.isArray(parsed.delegatedEmails) && parsed.delegatedEmails.length > 0
+            ? parsed.delegatedEmails
+            : (initialWhitelist.delegatedEmails || []),
+        };
+      }
+    } catch (e) {
+      console.warn('Không thể đọc whitelist từ localStorage:', e);
+    }
+    return initialWhitelist;
+  });
+
+  // Cập nhật và lưu Whitelist (đồng thời lưu localStorage và gửi tới dev server)
+  const updateWhitelist = async (newWhitelist) => {
+    const updated = {
+      ...newWhitelist,
+      lastUpdated: new Date().toISOString(),
+    };
+    setWhitelist(updated);
+    localStorage.setItem(STORAGE_WHITELIST_KEY, JSON.stringify(updated));
+
+    // Thử gửi lưu trực tiếp vào file src/data/whitelist.json thông qua Vite endpoint ở môi trường dev
+    try {
+      await fetch('/_api/save-whitelist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      // Môi trường production tĩnh sẽ không có endpoint này, lưu vào state và localStorage là đủ
+      console.log('Chạy trên môi trường tĩnh hoặc không có dev server endpoint');
+    }
+
+    return updated;
+  };
+
+  // Xác định Role của người dùng theo 4 cấp độ quy định
+  const { role, isGuest, isUser, isDelegated, isSuperAdmin, canViewFullData } = useMemo(() => {
+    if (!user || user.isGuest) {
+      return {
+        role: 'GUEST',
+        isGuest: true,
+        isUser: false,
+        isDelegated: false,
+        isSuperAdmin: false,
+        canViewFullData: false,
+      };
+    }
+
+    const email = (user.email || '').trim().toLowerCase();
+    const superAdminEmail = (whitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const delegatedList = (whitelist.delegatedEmails || []).map((e) => e.trim().toLowerCase());
+
+    // 1. View 3 (Super Admin): Duy nhất 1 tài khoản chuyendoiso@ctump.edu.vn
+    if (email === superAdminEmail) {
+      return {
+        role: 'SUPER_ADMIN',
+        isGuest: false,
+        isUser: false,
+        isDelegated: false,
+        isSuperAdmin: true,
+        canViewFullData: true,
+      };
+    }
+
+    // 2. View 3 (Delegated): Email có trong danh sách Whitelist
+    if (delegatedList.includes(email)) {
+      return {
+        role: 'DELEGATED',
+        isGuest: false,
+        isUser: false,
+        isDelegated: true,
+        isSuperAdmin: false,
+        canViewFullData: true,
+      };
+    }
+
+    // 3. View 2 (User): Đăng nhập bằng Gmail có đuôi trường @ctump.edu.vn hoặc @student.ctump.edu.vn
+    if (email.endsWith('@ctump.edu.vn') || email.endsWith('@student.ctump.edu.vn')) {
+      return {
+        role: 'USER',
+        isGuest: false,
+        isUser: true,
+        isDelegated: false,
+        isSuperAdmin: false,
+        canViewFullData: false, // Chỉ xem dòng của chính mình
+      };
+    }
+
+    // 4. Nếu là Gmail cá nhân (@gmail.com) nhưng không có trong Whitelist -> Cho phép xem ở chế độ User Thử Nghiệm
+    return {
+      role: 'USER',
+      isGuest: false,
+      isUser: true,
+      isDelegated: false,
+      isSuperAdmin: false,
+      canViewFullData: false, // Xem chế độ User cá nhân
+    };
+  }, [user, whitelist]);
 
   // Kiểm tra xem Client ID đã được cấu hình hợp lệ chưa
   const isConfigured = Boolean(
@@ -71,20 +184,29 @@ export function AuthProvider({ children }) {
       throw new Error('Không thể trích xuất thông tin người dùng từ Google Token.');
     }
 
+    const email = payload.email.trim().toLowerCase();
+    const superAdminEmail = (whitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const delegatedList = (whitelist.delegatedEmails || []).map((e) => e.trim().toLowerCase());
+
+    const isCtumpDomain = email.endsWith('@ctump.edu.vn') || email.endsWith('@student.ctump.edu.vn');
+    const isSuperAdminUser = email === superAdminEmail;
+    const isDelegatedUser = delegatedList.includes(email);
+
     const userData = {
       id: payload.sub,
       email: payload.email,
       name: payload.name || payload.email.split('@')[0],
       picture: payload.picture || '',
-      hd: payload.hd || '', // Hosted domain (vd: ctump.edu.vn)
+      hd: payload.hd || (isCtumpDomain ? 'ctump.edu.vn' : 'gmail.com'),
       loginAt: new Date().toISOString(),
       isGuest: false,
+      isPersonalTestAccount: !isCtumpDomain && !isSuperAdminUser && !isDelegatedUser,
     };
 
     setUser(userData);
     localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(userData));
     return userData;
-  }, []);
+  }, [whitelist]);
 
   // Chế độ đăng nhập xem trước (Khách thử nghiệm)
   const loginAsGuest = useCallback(() => {
@@ -102,6 +224,21 @@ export function AuthProvider({ children }) {
     return guestUser;
   }, []);
 
+  // Chức năng chuyển đổi tài khoản thử nghiệm nhanh (chỉ phục vụ thử nghiệm các View)
+  const switchSimulatedUser = useCallback((simulatedEmail, simulatedName) => {
+    const simulatedUser = {
+      id: 'sim_' + Date.now(),
+      email: simulatedEmail,
+      name: simulatedName || simulatedEmail.split('@')[0],
+      picture: '',
+      hd: simulatedEmail.includes('@ctump.edu.vn') ? 'ctump.edu.vn' : '',
+      loginAt: new Date().toISOString(),
+      isGuest: false,
+    };
+    setUser(simulatedUser);
+    localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(simulatedUser));
+  }, []);
+
   // Đăng xuất
   const logout = useCallback(() => {
     setUser(null);
@@ -114,12 +251,21 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    isAuthenticated: Boolean(user),
+    isAuthenticated: Boolean(user && !user.isGuest),
+    role,
+    isGuest,
+    isUser,
+    isDelegated,
+    isSuperAdmin,
+    canViewFullData,
+    whitelist,
+    updateWhitelist,
     clientId,
     isConfigured,
     updateClientId,
     loginWithCredential,
     loginAsGuest,
+    switchSimulatedUser,
     logout,
   };
 

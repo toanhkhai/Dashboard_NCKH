@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -49,7 +49,7 @@ import { TrendingUp, Users, Award, BookOpen, CalendarDays } from 'lucide-react';
 
 // ── Bảng màu ────────────────────────────────────────────────────────────────
 const SCORE_COLORS = {
-  '1.0 điểm': '#10B981',
+  '≥ 1.0 điểm': '#10B981',
   '0.75 điểm': '#3B82F6',
   '0.5 điểm': '#F59E0B',
   '0.25 điểm': '#94A3B8',
@@ -193,7 +193,7 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
   const yearData = useMemo(() => {
     const counts = {};
     records.forEach((r) => {
-      const yr = String(r.publishYear || 'Chưa rõ');
+      const yr = String(r.publishYear || 'Chưa rõ').trim();
       const validYear = (yr.length === 4 && (yr.startsWith('20') || yr.startsWith('19'))) ? yr : null;
       if (!validYear) return; // Bỏ qua năm không hợp lệ
       if (!counts[validYear]) {
@@ -257,7 +257,7 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
 
     // ── Điểm HĐGS (Source1 - Trong nước) ──
     const counts = {
-      '1.0 điểm': 0,
+      '≥ 1.0 điểm': 0,
       '0.75 điểm': 0,
       '0.5 điểm': 0,
       '0.25 điểm': 0,
@@ -265,7 +265,7 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
     };
     records.forEach((r) => {
       const s = Number(r.score) || 0;
-      if (s >= 1) counts['1.0 điểm']++;
+      if (s >= 1) counts['≥ 1.0 điểm']++;
       else if (s >= 0.75) counts['0.75 điểm']++;
       else if (s >= 0.5) counts['0.5 điểm']++;
       else if (s >= 0.25) counts['0.25 điểm']++;
@@ -306,25 +306,26 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
   }, [records]);
 
   // ════════════════════════════════════════════════════════════════════════════
-  // BIỂU ĐỒ 4: Top 10 Tác giả có nhiều công trình nhất
+  // BIỂU ĐỒ 4: Top 10 Cán bộ trường có nhiều bài báo nhất
   // ════════════════════════════════════════════════════════════════════════════
   const topAuthorsData = useMemo(() => {
     const counts = {};
     records.forEach((r) => {
-      // Ưu tiên tác giả liên hệ (corresponding author) - là field chính xác nhất
-      const primaryAuthor = (r.correspondingAuthor || '').trim();
-      if (
-        primaryAuthor &&
-        primaryAuthor !== 'Chưa cập nhật' &&
-        primaryAuthor !== '—' &&
-        primaryAuthor !== '0' &&
-        primaryAuthor.length > 2 &&
-        !primaryAuthor.includes('...')
-      ) {
-        counts[primaryAuthor] = (counts[primaryAuthor] || 0) + 1;
+      let authorList = [];
+      if (r.sourceType === 'source1') {
+        // NCKH Trong nước: Dùng cột "Nhóm tác giả" (tập cha)
+        authorList = Array.isArray(r.authors) && r.authors.length > 0 ? r.authors : [];
+        if (authorList.length === 0) {
+          const fallback = (r.mainAuthor && r.mainAuthor !== '—') ? r.mainAuthor : r.correspondingAuthor;
+          if (fallback && fallback !== 'Chưa cập nhật') authorList = [fallback];
+        }
       } else {
-        // Fallback: danh sách tác giả
-        const authorList = Array.isArray(r.authors) && r.authors.length > 0 ? r.authors : [];
+        // NCKH Quốc tế: CHỈ dùng cột "Tác giả là cán bộ trường" (tập con). 
+        // Dù người nhập liệu quên không nhập cột này, cũng tuyệt đối không lấy cột Nhóm tác giả tiếng Anh bù vào.
+        authorList = Array.isArray(r.ctumpAuthors) && r.ctumpAuthors.length > 0 ? r.ctumpAuthors : [];
+      }
+
+      if (authorList.length > 0) {
         authorList.forEach((name) => {
           const cleanName = String(name || '').trim();
           if (cleanName && cleanName.length > 2 && cleanName !== 'Chưa cập nhật' && !cleanName.includes('...')) {
@@ -371,6 +372,45 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
   // ── Tên hiển thị cho biểu đồ ──
   const sourceLabel = isSource2 ? 'quốc tế' : isSource1 ? 'trong nước' : 'tổng hợp';
 
+  // ── Custom Tooltip cho Biểu đồ Năm ──
+  const renderYearTooltip = useCallback(
+    ({ active, payload, label }) => {
+      if (!active || !payload || !payload.length) return null;
+      const row = payload[0]?.payload || {};
+
+      if (isCombined) {
+        const intl = row.international || 0;
+        const dom = row.domestic || 0;
+        const total = row.count ?? intl + dom;
+
+        return (
+          <div style={tooltipStyle} className="p-2.5 border border-slate-200">
+            <p className="font-semibold text-slate-800 mb-1">{label}</p>
+            <div className="space-y-1 text-xs">
+              <div style={{ color: '#8B5CF6' }}>Quốc tế : {intl} bài</div>
+              <div style={{ color: '#3B82F6' }}>Trong nước : {dom} bài</div>
+              <div className="border-t border-slate-100 pt-1 mt-1 font-semibold text-slate-800">
+                Tổng cộng : {total} bài
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const name = isSource2 ? 'Quốc tế' : isSource1 ? 'Trong nước' : 'Số bài';
+      const color = isSource2 ? '#8B5CF6' : '#3B82F6';
+      return (
+        <div style={tooltipStyle} className="p-2.5 border border-slate-200">
+          <p className="font-semibold text-slate-800 mb-1">{label}</p>
+          <div className="text-xs font-medium" style={{ color }}>
+            {name} : {row.count || 0} bài
+          </div>
+        </div>
+      );
+    },
+    [isCombined, isSource1, isSource2]
+  );
+
   return (
     <div className="space-y-6 mb-6">
       {/* ========================================================================= */}
@@ -394,14 +434,8 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
                   <XAxis dataKey="year" stroke="#64748B" fontSize={11} tickLine={false} />
                   <YAxis stroke="#64748B" fontSize={11} tickLine={false} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={tooltipStyle}
                     cursor={{ fill: 'rgba(226, 232, 240, 0.6)' }}
-                    formatter={(val, name, item) => {
-                      if (isCombined) {
-                        return [`${val} bài (${item.payload.domestic} trong nước, ${item.payload.international} quốc tế)`, name];
-                      }
-                      return [`${val} bài báo`, name];
-                    }}
+                    content={renderYearTooltip}
                   />
                   {isCombined ? (
                     <>
@@ -510,7 +544,7 @@ export const ChartsSection = ({ records = [], activeTab = 'source1' }) => {
         <div className="bg-white border border-slate-200 rounded-sm p-5 shadow-sm">
           <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 shadow-sm shadow-violet-500/50"></span>
-            {isSource2 ? 'Top 10 Tác giả NCKH quốc tế' : isSource1 ? 'Top 10 Tác giả NCKH trong nước' : 'Top 10 Tác giả có nhiều công trình nhất'}
+            {isSource2 ? 'Top 10 Cán bộ trường NCKH quốc tế' : isSource1 ? 'Top 10 Cán bộ trường NCKH trong nước' : 'Top 10 Cán bộ trường có nhiều bài báo nhất'}
           </h4>
 
           <div className="h-72 w-full">

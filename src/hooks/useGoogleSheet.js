@@ -112,9 +112,17 @@ export function useGoogleSheet(sheetUrl, sourceType = 'source1') {
     }
 
     const headerCells = rawRows[headerRowIdx] || [];
+    const seenHeaders = new Set();
     const headers = headerCells.map((h, colIdx) => {
-      const clean = (h || '').replace(/^\uFEFF/, '').trim();
-      return clean || `Cột_${colIdx + 1}`;
+      let clean = (h || '').replace(/^\uFEFF/, '').trim() || `Cột_${colIdx + 1}`;
+      let finalHeader = clean;
+      let counter = 1;
+      while (seenHeaders.has(finalHeader)) {
+        finalHeader = `${clean} (${counter})`;
+        counter++;
+      }
+      seenHeaders.add(finalHeader);
+      return finalHeader;
     });
 
     const dataRows = rawRows.slice(headerRowIdx + 1);

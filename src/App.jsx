@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { useAuth } from './context/AuthContext.jsx';
+import { LoginPage } from './components/LoginPage.jsx';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
-import { exportToCleanCSV } from './utils/cleanData.js';
+import { exportToCleanCSV, normalizeStr } from './utils/cleanData.js';
 import { Header } from './components/Header.jsx';
 import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
@@ -9,7 +11,7 @@ import { GlobalFilterBar } from './components/GlobalFilterBar.jsx';
 import { AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
 
-export default function App() {
+function DashboardContent() {
   const sheet1Url = DEFAULT_SHEET1_URL;
   const sheet2Url = DEFAULT_SHEET2_URL;
 
@@ -70,15 +72,18 @@ export default function App() {
   const filteredRecords = useMemo(() => {
     return activeRecords.filter((record) => {
       if (filters.search.trim()) {
-        const query = filters.search.toLowerCase().trim();
-        const matchTitle = (record.title || '').toLowerCase().includes(query);
-        const matchAuthor = (record.correspondingAuthor || '').toLowerCase().includes(query);
-        const matchJournal = (record.journal || '').toLowerCase().includes(query);
+        const normQuery = normalizeStr(filters.search);
+        const matchTitle = normalizeStr(record.title).includes(normQuery);
+        const matchAuthor = normalizeStr(record.correspondingAuthor).includes(normQuery);
+        const matchJournal = normalizeStr(record.journal).includes(normQuery);
         const matchAllAuthors = Array.isArray(record.authors)
-          ? record.authors.some((a) => a.toLowerCase().includes(query))
+          ? record.authors.some((a) => normalizeStr(a).includes(normQuery))
+          : false;
+        const matchCtumpAuthors = Array.isArray(record.ctumpAuthors)
+          ? record.ctumpAuthors.some((a) => normalizeStr(a).includes(normQuery))
           : false;
 
-        if (!matchTitle && !matchAuthor && !matchJournal && !matchAllAuthors) {
+        if (!matchTitle && !matchAuthor && !matchJournal && !matchAllAuthors && !matchCtumpAuthors) {
           return false;
         }
       }
@@ -116,7 +121,7 @@ export default function App() {
               return false;
             }
           } else {
-            // So sánh chính xác năm (Ví dụ: gõ "1" thì tìm đúng năm "1" -> 0 kết quả; gõ "2025" -> ra đúng năm 2025)
+            // So sánh chính xác năm
             if (recYearStr !== query) return false;
           }
         }
@@ -189,7 +194,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200`}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       <Header
         activeTab={activeView}
         onTabChange={() => {}}
@@ -280,4 +285,14 @@ export default function App() {
       </footer>
     </div>
   );
+}
+
+export default function App() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return <DashboardContent />;
 }

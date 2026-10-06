@@ -282,6 +282,8 @@ export function parseAuthors(val) {
     .filter((a) => a.length > 1);
 }
 
+// Đã xóa hàm isSamePerson theo yêu cầu đơn giản hóa logic
+
 /**
  * Chuẩn hóa một dòng dữ liệu thô từ BẤT KỲ Google Sheet nào thành bản ghi thống nhất
  * Tự động thích ứng thông minh với mọi tên cột!
@@ -394,15 +396,37 @@ export function cleanRawRecord(row, index, forcedSource) {
   const { year: publishYear, fullDate: publishDate } = dateKey ? extractYear(row[dateKey]) : { year: 'Chưa rõ', fullDate: '' };
 
   // 6. Nhóm tác giả / Danh sách tác giả / Người thực hiện
-  // Loại trừ các cột ghi rõ là "tác giả chính" hoặc "liên hệ" để tránh nhận nhầm
-  const authorsKey = findColKey(row, [
+  // CHIẾN LƯỢC MỚI: Tách bạch rõ ràng 2 danh sách
+  // 1. Lấy danh sách cán bộ trường (Tên chuẩn tiếng Việt)
+  // Từ khóa phải thật chính xác để tránh nhận nhầm cột "Cơ quan cán bộ", "SĐT cán bộ" ở sheet Trong nước
+  const ctumpAuthorKey = findColKey(row, ['tác giả là cán bộ', 'tác giả cán bộ', 'nhóm tác giả cán bộ', 'cán bộ trường', 'tác giả thuộc trường', 'tác giả trong trường']);
+  let ctumpAuthors = [];
+  if (ctumpAuthorKey && row[ctumpAuthorKey]) {
+    ctumpAuthors = parseAuthors(row[ctumpAuthorKey]);
+  }
+
+  // 2. Lấy danh sách TOÀN BỘ tác giả (Dùng để hiển thị)
+  let authors = [];
+  const authorKeywords = [
     'tất cả tác giả', 'tập thể tác giả', 'danh sách tác giả', 'nhóm tác giả',
     'tác giả', 'authors', 'author', 'họ và tên', 'họ tên',
-    'người thực hiện', 'chủ nhiệm', 'thành viên', 'họ và tên người nhập',
-    'người nhập', 'cán bộ', 'nhân sự'
-  ], ['chính', 'liên hệ', 'đứng đầu', 'chịu trách nhiệm', 'corresponding', 'first']);
-  const authors = authorsKey ? parseAuthors(row[authorsKey]) : [];
-  const authorCount = authors.length || 1;
+    'người thực hiện', 'chủ nhiệm', 'thành viên'
+  ];
+  const excludeAuthorKeywords = ['chính', 'liên hệ', 'đứng đầu', 'chịu trách nhiệm', 'corresponding', 'first', 'người nhập', 'cán bộ', 'thuộc trường'];
+
+  Object.keys(row).forEach(k => {
+    const normK = normalizeStr(k);
+    const isMatch = authorKeywords.some(kw => normK.includes(normalizeStr(kw)));
+    const isExcluded = excludeAuthorKeywords.some(ex => normK.includes(normalizeStr(ex)));
+    if (isMatch && !isExcluded) {
+      authors = [...authors, ...parseAuthors(row[k])];
+    }
+  });
+
+  // Chỉ đổ cán bộ trường vào authors nếu authors đang rỗng (để phòng hờ sheet không có cột "tất cả tác giả")
+  if (authors.length === 0 && ctumpAuthors.length > 0) {
+    authors = [...ctumpAuthors];
+  }
 
   // 7. Tác giả liên hệ / Chủ trì
   const correspondingKey = findColKey(row, [
@@ -423,6 +447,21 @@ export function cleanRawRecord(row, index, forcedSource) {
   ]);
   let mainAuthor = mainAuthorKey && row[mainAuthorKey] ? String(row[mainAuthorKey]).trim() : '';
   mainAuthor = mainAuthor.replace(/[0-9*†‡§]+/g, '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+
+  // Bổ sung: Rất nhiều trường hợp Google Sheet ghi người ở cột "Tác giả chính" / "Liên hệ" 
+  // nhưng lại quên ghi họ vào cột "Danh sách tất cả tác giả". Cần gộp họ vào mảng authors.
+  if (mainAuthor) {
+    const pMain = parseAuthors(mainAuthor);
+    authors = [...authors, ...pMain];
+  }
+  if (correspondingAuthor) {
+    const pCorr = parseAuthors(correspondingAuthor);
+    authors = [...authors, ...pCorr];
+  }
+  // Lọc trùng lặp lần cuối để đảm bảo một người không bị đếm 2 lần
+  authors = Array.from(new Set(authors));
+  ctumpAuthors = Array.from(new Set(ctumpAuthors));
+  const authorCount = authors.length || 1;
 
   // 8. Minh chứng & Link URL:
   // Quét cả cột minh chứng VÀ quét toàn bộ các cột trong hàng để tìm bất kỳ link URL nào (Google Drive, Dropbox, DOI, v.v.)
@@ -491,9 +530,10 @@ export function cleanRawRecord(row, index, forcedSource) {
     publishDate,
     publishYear,
     authors,
+    ctumpAuthors,
     authorCount,
     correspondingAuthor: correspondingAuthor || 'Chưa cập nhật',
-    mainAuthor: mainAuthor || 'null',
+    mainAuthor: mainAuthor || '—',
     volumeIssuePage,
     proofLinks,
     category,

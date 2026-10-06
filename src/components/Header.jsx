@@ -25,13 +25,11 @@ export const Header = ({
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5">
             {/* Logo & Portal Title */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center shrink-0 p-0.5 bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <img
-                  src="/logo/logo.png"
-                  alt="Logo CTUMP"
-                  className="w-full h-full object-contain"
-                />
-              </div>
+              <img
+                src="/logo/logo.png"
+                alt="Logo CTUMP"
+                className="w-11 h-11 object-contain shrink-0"
+              />
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight uppercase">
@@ -112,12 +110,12 @@ export const Header = ({
                         )}
                         {isDelegated && (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
-                            Ủy quyền
+                            Manager
                           </span>
                         )}
                         {isUser && !isSuperAdmin && (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-200">
-                            Cán bộ
+                            User
                           </span>
                         )}
                       </div>

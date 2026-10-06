@@ -54,14 +54,31 @@ export function AuthProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_WHITELIST_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const fileTime = new Date(initialWhitelist.lastUpdated || 0).getTime();
+        const savedTime = new Date(parsed.lastUpdated || 0).getTime();
+
+        // 1. Nếu file whitelist.json trong mã nguồn mới hơn hoặc bằng bản lưu trình duyệt,
+        // hoặc superAdmin trong mã nguồn đã thay đổi, hoặc cache không đúng định dạng:
+        // -> Luôn ưu tiên dùng file whitelist.json của mã nguồn và đồng bộ lại cache
+        const isFileNewerOrEqual = fileTime >= savedTime;
+        const isSuperAdminChanged = Boolean(
+          initialWhitelist.superAdmin && initialWhitelist.superAdmin !== parsed.superAdmin
+        );
+
+        if (isFileNewerOrEqual || isSuperAdminChanged || !Array.isArray(parsed.delegatedEmails)) {
+          localStorage.setItem(STORAGE_WHITELIST_KEY, JSON.stringify(initialWhitelist));
+          return initialWhitelist;
+        }
+
+        // 2. Nếu cache trình duyệt mới hơn (do người dùng vừa chỉnh sửa tạm thời trên giao diện):
         return {
           ...initialWhitelist,
           ...parsed,
-          // Luôn ưu tiên superAdmin mới nhất từ file whitelist.json trong mã nguồn
-          superAdmin: initialWhitelist.superAdmin || parsed.superAdmin || 'chuyendoiso@ctump.edu.vn',
+          superAdmin: initialWhitelist.superAdmin || parsed.superAdmin,
           delegatedEmails: Array.isArray(parsed.delegatedEmails) && parsed.delegatedEmails.length > 0
             ? parsed.delegatedEmails
             : (initialWhitelist.delegatedEmails || []),
+          lastUpdated: parsed.lastUpdated || initialWhitelist.lastUpdated,
         };
       }
     } catch (e) {
@@ -69,6 +86,14 @@ export function AuthProvider({ children }) {
     }
     return initialWhitelist;
   });
+
+  // Khôi phục và đồng bộ lại danh sách phân quyền từ file mã nguồn (whitelist.json)
+  const resetWhitelistToDefault = useCallback(() => {
+    localStorage.removeItem(STORAGE_WHITELIST_KEY);
+    localStorage.setItem(STORAGE_WHITELIST_KEY, JSON.stringify(initialWhitelist));
+    setWhitelist(initialWhitelist);
+    return initialWhitelist;
+  }, []);
 
   // Cập nhật và lưu Whitelist (đồng thời lưu localStorage và gửi tới dev server)
   const updateWhitelist = async (newWhitelist) => {
@@ -108,10 +133,11 @@ export function AuthProvider({ children }) {
     }
 
     const email = (user.email || '').trim().toLowerCase();
-    const superAdminEmail = (whitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const defaultSuperAdmin = (initialWhitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const superAdminEmail = (whitelist.superAdmin || defaultSuperAdmin).trim().toLowerCase();
     const delegatedList = (whitelist.delegatedEmails || []).map((e) => e.trim().toLowerCase());
 
-    // 1. View 3 (Super Admin): Duy nhất 1 tài khoản chuyendoiso@ctump.edu.vn
+    // 1. View 3 (Super Admin): Tài khoản quản trị tối cao
     if (email === superAdminEmail) {
       return {
         role: 'SUPER_ADMIN',
@@ -185,7 +211,8 @@ export function AuthProvider({ children }) {
     }
 
     const email = payload.email.trim().toLowerCase();
-    const superAdminEmail = (whitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const defaultSuperAdmin = (initialWhitelist.superAdmin || 'chuyendoiso@ctump.edu.vn').trim().toLowerCase();
+    const superAdminEmail = (whitelist.superAdmin || defaultSuperAdmin).trim().toLowerCase();
     const delegatedList = (whitelist.delegatedEmails || []).map((e) => e.trim().toLowerCase());
 
     const isCtumpDomain = email.endsWith('@ctump.edu.vn') || email.endsWith('@student.ctump.edu.vn');
@@ -260,6 +287,7 @@ export function AuthProvider({ children }) {
     canViewFullData,
     whitelist,
     updateWhitelist,
+    resetWhitelistToDefault,
     clientId,
     isConfigured,
     updateClientId,

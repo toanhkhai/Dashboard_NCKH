@@ -7,10 +7,9 @@ import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
 import { DataTable } from './components/DataTable.jsx';
 import { GlobalFilterBar } from './components/GlobalFilterBar.jsx';
-import { GuestDataBanner } from './components/GuestDataBanner.jsx';
 import { PermissionManager } from './components/PermissionManager.jsx';
 import { LoginModal } from './components/LoginModal.jsx';
-import { AlertCircle, FileSpreadsheet, User, Info } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet, User } from 'lucide-react';
 import { DEFAULT_SHEET1_URL, DEFAULT_SHEET2_URL } from './data/rawSheetData.js';
 
 export default function App() {
@@ -294,13 +293,11 @@ export default function App() {
             <ChartsSection records={filteredRecords} activeTab={activeView} />
 
             {/* BẢNG TRA CỨU (DataTable):
-                - View 1 (Guest): Ẩn hoàn toàn -> Hiện GuestDataBanner yêu cầu đăng nhập
+                - Chưa đăng nhập (Guest): Không hiển thị bảng và không hiện banner
                 - View 2 (User): Chỉ hiển thị các dòng có email tác giả khớp với user đang login
                 - View 3 (Delegated & Super Admin): Hiển thị toàn bộ dữ liệu (Full data)
             */}
-            {isGuest ? (
-              <GuestDataBanner onOpenLogin={() => setShowLoginModal(true)} />
-            ) : (
+            {!isGuest && (
               <div className="space-y-3">
                 {/* Thông báo trạng thái phân quyền View 2 (User) */}
                 {isUser && (
@@ -308,7 +305,7 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-blue-600 shrink-0" />
                       <span>
-                        <strong>Chế độ Cán bộ nghiên cứu:</strong> Đang hiển thị{' '}
+                        <strong>Chế độ User:</strong> Đang hiển thị{' '}
                         <strong className="text-blue-700">{userFilteredRecords.length}</strong> bài báo
                         khớp với tài khoản email <strong>{user?.email}</strong>.
                       </span>
@@ -319,15 +316,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Thông báo trạng thái phân quyền View 3 (Delegated / Super Admin) */}
-                {canViewFullData && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
-                    <Info className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>Quyền xem toàn bộ:</strong> Đang hiển thị danh mục đầy đủ ({userFilteredRecords.length} công trình) theo quyền {isSuperAdmin ? 'Super Admin' : 'Ủy quyền'}.
-                    </span>
-                  </div>
-                )}
 
                 <DataTable
                   records={userFilteredRecords}

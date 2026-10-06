@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import initialWhitelist from '../data/whitelist.json';
 import {
   X,
   Plus,
@@ -7,6 +8,7 @@ import {
   Save,
   Download,
   Copy,
+  RotateCcw,
   Check,
   AlertCircle,
   Search,
@@ -15,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export function PermissionManager({ isOpen, onClose }) {
-  const { whitelist, updateWhitelist, isSuperAdmin, user } = useAuth();
+  const { whitelist, updateWhitelist, resetWhitelistToDefault, isSuperAdmin, user } = useAuth();
   const [newEmail, setNewEmail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -27,7 +29,7 @@ export function PermissionManager({ isOpen, onClose }) {
   // Chuẩn hóa dữ liệu an toàn
   const safeWhitelist = useMemo(() => {
     return {
-      superAdmin: whitelist?.superAdmin || 'toanhkhai12345@gmail.com',
+      superAdmin: whitelist?.superAdmin || initialWhitelist.superAdmin || 'toanhkhai12345@gmail.com',
       delegatedEmails: Array.isArray(whitelist?.delegatedEmails) ? whitelist.delegatedEmails : [],
       lastUpdated: whitelist?.lastUpdated || '',
     };
@@ -145,6 +147,16 @@ export function PermissionManager({ isOpen, onClose }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setErrorMsg('Không thể sao chép dữ liệu.');
+    }
+  };
+
+  const handleResetToSource = () => {
+    try {
+      resetWhitelistToDefault();
+      setSuccessMsg('Đã đồng bộ và tải lại danh sách từ file mã nguồn (whitelist.json).');
+      setTimeout(() => setSuccessMsg(''), 3500);
+    } catch (err) {
+      setErrorMsg('Không thể khôi phục dữ liệu: ' + (err?.message || 'Lỗi không xác định'));
     }
   };
 
@@ -346,6 +358,16 @@ export function PermissionManager({ isOpen, onClose }) {
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>Tải file</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetToSource}
+              title="Khôi phục và đồng bộ lại danh sách phân quyền từ file mã nguồn (whitelist.json)"
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-md text-xs font-medium flex items-center gap-1 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+              <span>Đồng bộ từ file</span>
             </button>
           </div>
 

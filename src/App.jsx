@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
-import { exportToCleanCSV, normalizeStr } from './utils/cleanData.js';
+import { exportToCleanCSV, normalizeStr, isRecordAuthorMatch } from './utils/cleanData.js';
 import { Header } from './components/Header.jsx';
 import { KPICards } from './components/KPICards.jsx';
 import { ChartsSection } from './components/ChartsSection.jsx';
@@ -16,6 +16,9 @@ export default function App() {
   const { user, isGuest, isUser, isDelegated, isSuperAdmin, canViewFullData } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+
+  // Tên tác giả đối soát được lấy trực tiếp và bất biến từ tài khoản Google đăng nhập
+  const authorName = (user?.name || '').trim();
 
   const sheet1Url = DEFAULT_SHEET1_URL;
   const sheet2Url = DEFAULT_SHEET2_URL;
@@ -159,33 +162,23 @@ export default function App() {
   }, [activeRecords, filters]);
 
   // PHÂN QUYỀN DỮ LIỆU BẢNG TRA CỨU (DataTable):
-  // - View 2 (User): Chỉ hiển thị các dòng có email tác giả khớp với email đang đăng nhập
+  // - View 2 (User): Lấy tên từ Google đăng nhập và so sánh với các cột tác giả:
+  //   + Bài trong nước (source1): So sánh với cột "Nhóm tác giả"
+  //   + Bài quốc tế (source2): So sánh với các cột "Nhóm Tác giả là cán bộ Trường", "Tác giả liên hệ", "Đồng tác giả chính"
   // - View 3 (Delegated & Super Admin): Hiển thị toàn bộ dữ liệu (Full data)
   const userFilteredRecords = useMemo(() => {
     if (canViewFullData) {
       return filteredRecords;
     }
 
-    if (isUser && user?.email) {
-      const userEmailNorm = user.email.trim().toLowerCase();
+    if (isUser && authorName) {
       return filteredRecords.filter((record) => {
-        // Kiểm tra trường record.email
-        if (record.email && record.email.trim().toLowerCase() === userEmailNorm) {
-          return true;
-        }
-        // Kiểm tra trường rawRecord xem có cột nào chứa email của người dùng không
-        if (record.rawRecord) {
-          const matchCol = Object.values(record.rawRecord).some((val) =>
-            typeof val === 'string' && val.trim().toLowerCase().includes(userEmailNorm)
-          );
-          if (matchCol) return true;
-        }
-        return false;
+        return isRecordAuthorMatch(record, authorName);
       });
     }
 
     return [];
-  }, [filteredRecords, canViewFullData, isUser, user?.email]);
+  }, [filteredRecords, canViewFullData, isUser, authorName]);
 
   const currentLoading =
     activeView === 'source1'
@@ -299,19 +292,12 @@ export default function App() {
             */}
             {!isGuest && (
               <div className="space-y-3">
-                {/* Thông báo trạng thái phân quyền View 2 (User) */}
+                {/* Dòng thông báo nhỏ cho Chế độ User */}
                 {isUser && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs flex items-center justify-between gap-2 shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>
-                        <strong>Chế độ User:</strong> Đang hiển thị{' '}
-                        <strong className="text-blue-700">{userFilteredRecords.length}</strong> bài báo
-                        khớp với tài khoản email <strong>{user?.email}</strong>.
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-blue-600 font-medium hidden sm:inline">
-                      (Chỉ bạn mới xem được danh mục bài báo của mình)
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 px-1">
+                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>
+                      Đang hiển thị <strong>{userFilteredRecords.length}</strong> bài báo của tác giả <strong>{user?.name || user?.email}</strong>
                     </span>
                   </div>
                 )}

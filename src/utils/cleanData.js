@@ -282,7 +282,152 @@ export function parseAuthors(val) {
     .filter((a) => a.length > 1);
 }
 
-// Đã xóa hàm isSamePerson theo yêu cầu đơn giản hóa logic
+/**
+ * Làm sạch tên tác giả: loại bỏ học hàm, học vị, danh xưng (GS, PGS, TS, BS...), ký hiệu chú thích
+ */
+export function cleanAuthorName(str) {
+  if (!str) return '';
+  return String(str)
+    // Loại bỏ nội dung trong ngoặc đơn, ngoặc vuông (ví dụ: (CTUMP), [Khoa Y]...)
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    // Loại bỏ học hàm, học vị, danh xưng
+    .replace(/\b(gs|pgs|ts|ths|bs|bscki|bsckii|cn|duoc si|ds|thac si|tien si|giao su)\b\.?/gi, ' ')
+    // Loại bỏ mã sinh viên, mã số cán bộ đi kèm tên tài khoản (ví dụ B2204939, 2204939...)
+    .replace(/\b[a-zA-Z]{0,2}\d{4,}\b/g, ' ')
+    // Loại bỏ số và ký tự chú thích
+    .replace(/[0-9*†‡§#\-_/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Chuẩn hóa chuỗi không dấu, chuyển chữ 'đ' thành 'd'
+ */
+export function normalizeNoAccent(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * So sánh xem hai tên tác giả có khớp nhau hay không:
+ * 1. Khớp tuyệt đối có dấu (không phân biệt hoa thường)
+ * 2. Khớp tuyệt đối không dấu (trường hợp Google Account không gõ dấu tiếng Việt)
+ * 3. Khớp đảo thứ tự từ họ - tên (trường hợp Google Account hiển thị tên theo dạng First Name - Last Name)
+ */
+export function isNameMatch(searchName, targetName) {
+  if (!searchName || !targetName) return false;
+
+  const cleanSearch = cleanAuthorName(searchName);
+  const cleanTarget = cleanAuthorName(targetName);
+  if (!cleanSearch || !cleanTarget) return false;
+
+  // 1. So khớp trực tiếp có dấu
+  if (cleanSearch.toLowerCase() === cleanTarget.toLowerCase()) return true;
+
+  // 2. So khớp không dấu
+  const normSearch = normalizeNoAccent(cleanSearch);
+  const normTarget = normalizeNoAccent(cleanTarget);
+  if (normSearch === normTarget) return true;
+
+  // 3. So khớp tập từ (xử lý đảo họ tên, vd: 'Hieu Phan Ly' vs 'Phan Ly Hieu')
+  const wordsSearch = normSearch.split(' ').filter((w) => w.length > 0);
+  const wordsTarget = normTarget.split(' ').filter((w) => w.length > 0);
+
+  if (wordsSearch.length >= 2 && wordsSearch.length === wordsTarget.length) {
+    const sortedSearch = [...wordsSearch].sort().join(' ');
+    const sortedTarget = [...wordsTarget].sort().join(' ');
+    if (sortedSearch === sortedTarget) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Tách chuỗi ô tác giả thành mảng các tên tác giả riêng biệt
+ */
+export function splitAuthors(cellValue) {
+  if (!cellValue) return [];
+  return String(cellValue)
+    .split(/[,;\n\r]+/)
+    .map((a) => cleanAuthorName(a))
+    .filter((a) => a.length > 1);
+}
+
+/**
+ * Kiểm tra xem tên tài khoản Google có khớp với các cột tác giả của bài báo:
+ * - Đối với bài Trong nước (source1): So sánh với cột "Nhóm tác giả"
+ * - Đối với bài Quốc tế (source2): So sánh với các cột:
+ *     1. "Nhóm Tác giả là cán bộ Trường"
+ *     2. "Tác giả liên hệ"
+ *     3. "Đồng tác giả chính"
+ *     (kèm kiểm tra bổ sung cột "Tác giả chính")
+ */
+export function isRecordAuthorMatch(record, userName) {
+  if (!record || !userName) return false;
+  const raw = record.rawRecord || {};
+  const isSource1 = record.sourceType === 'source1';
+
+  if (isSource1) {
+    // 1. Trong nước: So sánh với cột "Nhóm tác giả"
+    const authorColKey = findColKey(raw, [
+      'nhóm tác giả (lưu ý nhập dùng dấu phẩy',
+      'nhóm tác giả',
+      'tập thể tác giả',
+      'tất cả tác giả',
+      'danh sách tác giả',
+    ]);
+    const authorStr = authorColKey && raw[authorColKey] ? raw[authorColKey] : '';
+    const authors = splitAuthors(authorStr);
+
+    const candidates = authors.length > 0 ? authors : (record.authors || []);
+    return candidates.some((a) => isNameMatch(userName, a));
+  } else {
+    // 2. Quốc tế: So sánh với:
+    // - "Nhóm Tác giả là cán bộ Trường"
+    // - "Tác giả liên hệ"
+    // - "Đồng tác giả chính"
+    const cbKey = findColKey(raw, [
+      'nhóm tác giả là cán bộ trường',
+      'nhóm tác giả là cán bộ',
+      'tác giả là cán bộ',
+      'tác giả cán bộ',
+      'cán bộ trường',
+    ]);
+    const cbAuthors = cbKey && raw[cbKey] ? splitAuthors(raw[cbKey]) : (record.ctumpAuthors || []);
+
+    const lhKey = findColKey(raw, [
+      'tác giả liên hệ',
+      'corresponding',
+      'người liên hệ',
+    ]);
+    const lhAuthors = lhKey && raw[lhKey] ? splitAuthors(raw[lhKey]) : (record.correspondingAuthor ? [record.correspondingAuthor] : []);
+
+    const dtgcKey = findColKey(raw, [
+      'đồng tác giả chính',
+      'co-first',
+      'equal author',
+      'co first',
+    ]);
+    const dtgcAuthors = dtgcKey && raw[dtgcKey] ? splitAuthors(raw[dtgcKey]) : (record.coFirstAuthor ? [record.coFirstAuthor] : []);
+
+    const tgcKey = findColKey(raw, [
+      'tác giả chính (tác giả đầu tiên)',
+      'tác giả chính',
+    ]);
+    const tgcAuthors = tgcKey && raw[tgcKey] ? splitAuthors(raw[tgcKey]) : (record.mainAuthor ? [record.mainAuthor] : []);
+
+    const allCandidates = [...cbAuthors, ...lhAuthors, ...dtgcAuthors, ...tgcAuthors];
+    return allCandidates.some((a) => isNameMatch(userName, a));
+  }
+}
 
 /**
  * Chuẩn hóa một dòng dữ liệu thô từ BẤT KỲ Google Sheet nào thành bản ghi thống nhất
@@ -448,6 +593,13 @@ export function cleanRawRecord(row, index, forcedSource) {
   let mainAuthor = mainAuthorKey && row[mainAuthorKey] ? String(row[mainAuthorKey]).trim() : '';
   mainAuthor = mainAuthor.replace(/[0-9*†‡§]+/g, '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
 
+  // 7.6. Đồng tác giả chính (Co-First / Equal Author)
+  const coFirstAuthorKey = findColKey(row, [
+    'đồng tác giả chính', 'co-first', 'equal author', 'co first author'
+  ]);
+  let coFirstAuthor = coFirstAuthorKey && row[coFirstAuthorKey] ? String(row[coFirstAuthorKey]).trim() : '';
+  coFirstAuthor = coFirstAuthor.replace(/[0-9*†‡§]+/g, '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+
   // Bổ sung: Rất nhiều trường hợp Google Sheet ghi người ở cột "Tác giả chính" / "Liên hệ" 
   // nhưng lại quên ghi họ vào cột "Danh sách tất cả tác giả". Cần gộp họ vào mảng authors.
   if (mainAuthor) {
@@ -534,6 +686,7 @@ export function cleanRawRecord(row, index, forcedSource) {
     authorCount,
     correspondingAuthor: correspondingAuthor || 'Chưa cập nhật',
     mainAuthor: mainAuthor || '—',
+    coFirstAuthor: coFirstAuthor || '',
     volumeIssuePage,
     proofLinks,
     category,

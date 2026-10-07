@@ -29,7 +29,7 @@ export function PermissionManager({ isOpen, onClose }) {
   // Chuẩn hóa dữ liệu an toàn
   const safeWhitelist = useMemo(() => {
     return {
-      superAdmin: whitelist?.superAdmin || initialWhitelist.superAdmin || 'toanhkhai12345@gmail.com',
+      superAdmin: whitelist?.superAdmin || initialWhitelist.superAdmin || 'chuyendoiso@ctump.edu.vn',
       delegatedEmails: Array.isArray(whitelist?.delegatedEmails) ? whitelist.delegatedEmails : [],
       lastUpdated: whitelist?.lastUpdated || '',
     };

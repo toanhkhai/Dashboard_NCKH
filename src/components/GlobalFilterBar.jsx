@@ -11,9 +11,45 @@ export const GlobalFilterBar = ({
   isCombined = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [localSearch, setLocalSearch] = useState(filters.search || '');
+
+  // Đồng bộ nếu filters.search thay đổi từ bên ngoài (ví dụ reset)
+  React.useEffect(() => {
+    setLocalSearch(filters.search || '');
+  }, [filters.search]);
+
+  // Debounce 200ms để người dùng gõ phím mượt mà 60fps, không bị đơ giao diện
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.search) {
+        onFilterChange((prev) => ({ ...prev, search: localSearch }));
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, filters.search, onFilterChange]);
 
   const handleChange = (field, value) => {
-    onFilterChange((prev) => ({ ...prev, [field]: value }));
+    if (field === 'search') {
+      setLocalSearch(value);
+      // Nếu xóa trắng thì kích hoạt ngay lập tức không cần đợi debounce
+      if (!value) {
+        onFilterChange((prev) => ({ ...prev, search: '' }));
+      }
+    } else {
+      onFilterChange((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const handleClearSearch = () => {
+    setLocalSearch('');
+    onFilterChange((prev) => ({ ...prev, search: '' }));
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      onFilterChange((prev) => ({ ...prev, search: localSearch }));
+    }
   };
 
   return (
@@ -32,11 +68,22 @@ export const GlobalFilterBar = ({
           <div className="relative flex-1 min-w-[200px]">
             <input
               type="text"
-              placeholder="Tìm theo tên bài báo, tác giả, tạp chí..."
-              value={filters.search}
+              placeholder="Tìm theo tên bài báo, tác giả..."
+              value={localSearch}
               onChange={(e) => handleChange('search', e.target.value)}
-              className="block w-full pl-3 pr-3 py-2 bg-slate-50 border border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 transition-colors"
+              onKeyDown={handleSearchKeyDown}
+              className="block w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900 transition-colors"
             />
+            {localSearch && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                title="Xóa tìm kiếm (quay về danh sách ban đầu)"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 focus:outline-none rounded hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Nút Toggle mở rộng trên Mobile */}

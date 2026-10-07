@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useDeferredValue } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useGoogleSheet } from './hooks/useGoogleSheet.js';
 import { exportToCleanCSV, normalizeStr, isRecordAuthorMatch } from './utils/cleanData.js';
@@ -34,6 +34,9 @@ export default function App() {
     qRank: 'all',
     sourceType: 'all',
   });
+
+  // Sử dụng useDeferredValue để việc lọc và vẽ lại biểu đồ không chặn luồng gõ phím của người dùng
+  const deferredSearch = useDeferredValue(filters.search);
 
   const activeView = filters.sourceType === 'all' ? 'combined' : filters.sourceType;
 
@@ -79,21 +82,17 @@ export default function App() {
   }, [activeRecords]);
 
   // Bộ lọc dữ liệu chung (search, year, score, journal, qRank)
+  // TỐI ƯU SIÊU TỐC: Dùng searchIndex chuẩn hóa trước, tính normQuery 1 lần duy nhất ngoài vòng lặp
   const filteredRecords = useMemo(() => {
-    return activeRecords.filter((record) => {
-      if (filters.search.trim()) {
-        const normQuery = normalizeStr(filters.search);
-        const matchTitle = normalizeStr(record.title).includes(normQuery);
-        const matchAuthor = normalizeStr(record.correspondingAuthor).includes(normQuery);
-        const matchJournal = normalizeStr(record.journal).includes(normQuery);
-        const matchAllAuthors = Array.isArray(record.authors)
-          ? record.authors.some((a) => normalizeStr(a).includes(normQuery))
-          : false;
-        const matchCtumpAuthors = Array.isArray(record.ctumpAuthors)
-          ? record.ctumpAuthors.some((a) => normalizeStr(a).includes(normQuery))
-          : false;
+    const rawSearch = (deferredSearch || '').trim();
+    // Yêu cầu tối thiểu 2 ký tự để kích hoạt tìm kiếm (vừa loại bỏ lag vừa giải quyết triệt để vấn đề gõ 1 chữ cái)
+    const hasSearch = rawSearch.length >= 2;
+    const normQuery = hasSearch ? normalizeStr(rawSearch) : '';
 
-        if (!matchTitle && !matchAuthor && !matchJournal && !matchAllAuthors && !matchCtumpAuthors) {
+    return activeRecords.filter((record) => {
+      if (hasSearch && normQuery) {
+        const recordIndex = record.searchIndex || '';
+        if (!recordIndex.includes(normQuery)) {
           return false;
         }
       }
@@ -159,26 +158,38 @@ export default function App() {
 
       return true;
     });
-  }, [activeRecords, filters]);
+  }, [activeRecords, filters, deferredSearch]);
 
   // PHÂN QUYỀN DỮ LIỆU BẢNG TRA CỨU (DataTable):
-  // - View 2 (User): Lấy tên từ Google đăng nhập và so sánh với các cột tác giả:
-  //   + Bài trong nước (source1): So sánh với cột "Nhóm tác giả"
-  //   + Bài quốc tế (source2): So sánh với các cột "Nhóm Tác giả là cán bộ Trường", "Tác giả liên hệ", "Đồng tác giả chính"
   // - View 3 (Delegated & Super Admin): Hiển thị toàn bộ dữ liệu (Full data)
+  // - View 2 (User - Gmail không nằm trong Whitelist):
+  //   + Khi User search trên ô text tìm kiếm: Bảng hiển thị các kết quả liên quan
+  //   + Khi xóa / không có từ khóa tìm kiếm: Bảng quay về trạng thái ban đầu
+  //     (chỉ hiển thị bài của user nếu có, hoặc không hiển thị gì nếu không có công trình NCKH nào)
   const userFilteredRecords = useMemo(() => {
     if (canViewFullData) {
       return filteredRecords;
     }
 
-    if (isUser && authorName) {
-      return filteredRecords.filter((record) => {
-        return isRecordAuthorMatch(record, authorName);
-      });
+    if (isUser) {
+      const hasSearch = Boolean(deferredSearch && deferredSearch.trim().length >= 2);
+      if (hasSearch) {
+        // Khi user search trên ô text (tối thiểu 2 ký tự): hiển thị các kết quả liên quan
+        return filteredRecords;
+      }
+
+      // Khi chưa tìm kiếm hoặc từ khóa < 2 ký tự: quay về trạng thái hiển thị bài của user
+      if (authorName) {
+        return filteredRecords.filter((record) => {
+          return isRecordAuthorMatch(record, authorName);
+        });
+      }
+
+      return [];
     }
 
     return [];
-  }, [filteredRecords, canViewFullData, isUser, authorName]);
+  }, [filteredRecords, canViewFullData, isUser, authorName, deferredSearch]);
 
   const currentLoading =
     activeView === 'source1'
@@ -321,9 +332,19 @@ export default function App() {
                 {isUser && (
                   <div className="flex items-center gap-1.5 text-xs text-slate-500 px-1">
                     <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>
-                      Đang hiển thị <strong>{userFilteredRecords.length}</strong> bài báo của tác giả <strong>{user?.name || user?.email}</strong>
-                    </span>
+                    {filters.search?.trim().length >= 2 ? (
+                      <span>
+                        Kết quả tìm kiếm cho &ldquo;<strong>{filters.search.trim()}</strong>&rdquo;: tìm thấy <strong>{userFilteredRecords.length}</strong> bài báo
+                      </span>
+                    ) : filters.search?.trim().length === 1 ? (
+                      <span className="text-amber-600 font-medium">
+                        Vui lòng nhập tối thiểu 2 ký tự để tìm kiếm...
+                      </span>
+                    ) : (
+                      <span>
+                        Đang hiển thị <strong>{userFilteredRecords.length}</strong> bài báo của tác giả <strong>{user?.name || user?.email}</strong>
+                      </span>
+                    )}
                   </div>
                 )}
 

@@ -670,6 +670,12 @@ export function cleanRawRecord(row, index, forcedSource) {
     scoreDisplay = '—';
   }
 
+  // Pre-compute chỉ mục tìm kiếm không dấu (searchIndex): CHỈ TẬP TRUNG TÊN BÀI BÁO + TÊN TÁC GIẢ
+  // (Các trường Tạp chí, Năm XB, Điểm, Hạng Q, Nguồn đã có bộ lọc chuyên biệt riêng)
+  const searchIndex = normalizeStr(
+    `${title} ${correspondingAuthor} ${mainAuthor} ${coFirstAuthor} ${(authors || []).join(' ')} ${(ctumpAuthors || []).join(' ')}`
+  );
+
   return {
     id: `rec-${sourceType}-${index}-${Date.now() % 100000}`,
     timestamp,
@@ -694,6 +700,7 @@ export function cleanRawRecord(row, index, forcedSource) {
     impactFactor,
     doi,
     sourceType,
+    searchIndex,
     paperType: sourceType === 'source1' ? 'Trong nước (HĐGS)' : 'Quốc tế (Scopus/ISI)',
     rawRecord: row, // Giữ 100% cột dữ liệu gốc của Google Sheet
   };
